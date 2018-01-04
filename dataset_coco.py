@@ -13,15 +13,22 @@ import matplotlib.pyplot as plt
 import pylab
 import os
 import cv2
+import random
 from multiprocessing import Process, Queue
 pylab.rcParams['figure.figsize'] = (8.0, 10.0)
-
+#cat - category
+#img - image
+#ann - annotation
 class Dataset:
-    def __init__(self, dataDir, imageSize, targetSize, batchSize):
+    def __init__(self, dataDir, imageSize, targetSize, batchSize,
+                 minLabelArea = 256., maxUpscale = 2., minUnderscale = 0.6):
         self.dataDir = dataDir
         self.imageSize = imageSize
         self.targetSize = targetSize
         self.batchSize = batchSize
+        self.minLabelArea = minLabelArea
+        self.maxUpscale = maxUpscale
+        self.minUnderscale = minUnderscale
         self.initImages()
         self.initWorkers()
     def initImages(self):
@@ -33,15 +40,66 @@ class Dataset:
         annFiles += ['{}/annotations/person_keypoints_{}.json'.format(dataDir, dataType) \
                     for dataType in types]
         cocos = [COCO(annFile) for annFile in annFiles]
-        cats = coco.loadCats(cocos[0].getCatIds())
+        cats = cocos[0].loadCats(cocos[0].getCatIds())
         self.sCatNms = sorted(list(set([cat['supercategory'] for cat in cats])))
-        self.kpCatNms =  cocos[2].loadCats(1)[0]['keypoints']
+        self.kpCatNms = cocos[2].loadCats(1)[0]['keypoints']
+        self.cocos = cocos
+        self.types = types
+        self.cats = cats
+    def addSuperCat(self, ann):
+        cats = self.cats
+        annSupCat = [cat['supercategory'] for cat in cats \
+                     if cat['id'] == ann['category_id']][0]
+        ann['supercategory_id'] = self.sCatNms.index(annSupCat)
+        
     def generateTargets(self):
         pass
     def generateMask(self):
         pass
+    def scaleStride(self, img, anns):
+        #generate random scale and stride to select patch from image
+        #to select top left corner:
+        scale = 1.0
+        stride = (0, 0)
+        maxUpscale = self.maxUpscale
+        minUnderscale = self.minUnderscale
+        minLabelArea = self.minLabelArea
+        imageSize = self.imageSize
+        scale = minUnderscale + (maxUpscale - minUnderscale)*random.random()
+        w, h = img['width'], img['height']
+        minImgLabel = np.min([ann['area'] for ann in anns])
+        #Label area should be bigger than minLabelArea - 256 (16px x 16px)
+        scale = max([scale, minLabelArea / minImgLabel])
+        wScaled, hScaled = [int(dim * scale) for dim in [w, h]]
+        stride = [np.random.randint(0, dim - imageSize) for dim in [wScaled, hScaled]]
+        return scale, stride
+    
+        
     def batchGenerator(self, queue, val=False):
+        cocos = self.cocos
+        dataDir = self.dataDir
+        types = self.types
+        workingCocos = cocos[val::2] #instances and person keypoints
+        dataType = types[val]
+        imgIds = workingCocos[0].getImgIds()
+        seed = 7
+        random.seed(seed)
+        random.shuffle(imgIds)
+        imgIter = 0        
         while(1):
+            imgId = imgIds[imgIter]
+            img = workingCocos[0].loadImgs(imgId)[0] #only one image
+            annIds = workingCocos[0].getAnnIds(imgIds=img['id'])
+            anns = workingCocos[0].loadAnns(annIds)
+            for ann in anns:
+                self.addSuperCat(ann)
+            imgPath = os.path.join(dataDir, dataType, img['file_name'])
+            I = cv2.imread(imgPath, 0)
+            cv2.namedWindow('test', cv2.WINDOW_NORMAL)
+            cv2.imshow('test', I)
+            cv2.waitKey(1000)
+            cv2.destroyWindow('test')
+            imgIter+=1
             queue.put((1,2,3))
             print '123 added', val
     def initWorkers(self):
