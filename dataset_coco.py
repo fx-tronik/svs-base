@@ -272,4 +272,3 @@ if __name__ == "__main__":
         dataset.endDataset
     dataset.endDataset()
 
-#TODO BUG - > repeating images
