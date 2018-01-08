@@ -179,9 +179,9 @@ class Dataset:
         imgIter = 0  
         def popContainer(container, batchSize):
             data = container[:batchSize]
+            print 'BF', np.shape(container)
             container = container[batchSize:]
-            print 'I POOP', len(container)
-            return np.stack(data, axis = 0)
+            return np.stack(data, axis = 0), container
         iCont, tCont, mCont = [], [], []
         while(1):
             imgId = imgIds[imgIter]
@@ -210,14 +210,11 @@ class Dataset:
             tCont.append(targets)
             mCont.append(masks)
             imgIter+=1
-            print 'LEN', len(iCont), batchSize
             while (len(iCont) >= batchSize):
-                iB = popContainer(iCont, batchSize)
-                tB = popContainer(tCont, batchSize)
-                mB = popContainer(mCont, batchSize)
+                iB, iCont = popContainer(iCont, batchSize)
+                tB, tCont = popContainer(tCont, batchSize)
+                mB, mCont = popContainer(mCont, batchSize)
                 queue.put((iB, tB, mB))
-            
-
 
     def initWorkers(self):
         self.trainQ = None
@@ -256,7 +253,7 @@ class Dataset:
         cv2.waitKey(0)
         cv2.destroyWindow(winName)
     def iterateMinibatches(self, val = False):
-        valBatches = 8
+        valBatches = 1
         queue = self.valQ if val else self.trainQ
         batches = valBatches if val else 20 * valBatches
         for batchId in range(batches):
@@ -266,8 +263,13 @@ if __name__ == "__main__":
     dataDir = '/home/jakub/data/fxi/coco'
     dataset  = Dataset(dataDir=dataDir, imageSize=256, targetSize=40, 
                        batchSize=8)
-    for inputs, targets, masks in dataset.iterateMinibatches(val=False):
-        dataset.showTensor(inputs[0])
+    try:
+        for inputs, targets, masks in dataset.iterateMinibatches(val=False):
+            print inputs.item(0)
+            for i in range(inputs.shape[0]):
+                dataset.showTensor(inputs[i])
+    except KeyboardInterrupt:
+        dataset.endDataset
     dataset.endDataset()
 
 #TODO BUG - > repeating images
