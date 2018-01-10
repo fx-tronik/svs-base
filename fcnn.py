@@ -81,6 +81,8 @@ class fcnn(nnBase):
         lastNonlin = logSoftmax if train else softmax
         network = L.Conv2DLayer(network, num_filters=2*self.numClasses, 
                                 filter_size=(1, 1), nonlinearity=lastNonlin)
+        network = L.ReshapeLayer(network, ([0], self.numClasses, 2, [2], [3]))
+        network = L.NonlinearityLayer(network, logSoftmax)
         if modelFile:
             modelWeights = np.load(modelFile)
             modelWeights = modelWeights[modelWeights.keys()[0]]

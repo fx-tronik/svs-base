@@ -15,6 +15,7 @@ import os
 import cv2
 import random
 from multiprocessing import Process, Queue
+import time
 import string
 pylab.rcParams['figure.figsize'] = (8.0, 10.0)
 #cat - category
@@ -23,7 +24,8 @@ pylab.rcParams['figure.figsize'] = (8.0, 10.0)
 
 class Dataset:
     def __init__(self, dataDir, imageSize, targetSize, batchSize,
-                 minLabelArea=256., maxUpscale=2., minUnderscale=0.6):
+                 minLabelArea=256., maxUpscale=2., minUnderscale=0.6,
+                 biOutput=True, networkScale = 8):
         self.dataDir = dataDir
         self.imageSize = imageSize
         self.targetSize = targetSize
@@ -31,6 +33,8 @@ class Dataset:
         self.minLabelArea = minLabelArea
         self.maxUpscale = maxUpscale
         self.minUnderscale = minUnderscale
+        self.biOutput = biOutput
+        self.networkScale = networkScale
         self.initImages()
         self.initWorkers()
 
@@ -179,7 +183,6 @@ class Dataset:
         imgIter = 0  
         def popContainer(container, batchSize):
             data = container[:batchSize]
-            print 'BF', np.shape(container)
             container = container[batchSize:]
             return np.stack(data, axis = 0), container
         iCont, tCont, mCont = [], [], []
@@ -206,6 +209,7 @@ class Dataset:
             scale, stride = self.scaleStride(img, anns)
             [image, targets, masks] = map(lambda t: self.cutPatch(t, scale, stride), 
                                           [image, targets, masks])
+            targets, masks = self.formatTarget(targets, masks, biOutput=self.biOutput)
             iCont.append(image)
             tCont.append(targets)
             mCont.append(masks)
@@ -258,16 +262,34 @@ class Dataset:
         batches = valBatches if val else 20 * valBatches
         for batchId in range(batches):
             yield queue.get()
+    def formatTarget(self, target, mask, biOutput=True):
+        #resize target and masks to final shape
+        #biOutput - use if two neurons are coding output
+        #inputs in format (classNum, imgSize, imgSize)
+        targetSize = self.targetSize
+        imageSize = self.imageSize
+        networkScale = self.networkScale
+        margin = (imageSize / networkScale - targetSize) / 2
+        target, mask = [np.stack([cv2.resize(ch, None, fx=1.0 / networkScale, \
+                                             fy=1.0 / networkScale, \
+                                             interpolation=cv2.INTER_NEAREST)[margin:margin+targetSize, margin:margin+targetSize]\
+                                for ch in tensor]) for tensor in [target, mask]]
+        target[target > 0.0] = 1.0
+        if biOutput:
+            target = np.stack([target, 1.0 - target], axis = 1)
+        return target, mask
         
 if __name__ == "__main__":
     dataDir = '/home/jakub/data/fxi/coco'
-    dataset  = Dataset(dataDir=dataDir, imageSize=256, targetSize=40, 
+    dataset  = Dataset(dataDir=dataDir, imageSize=256, targetSize=24, 
                        batchSize=8)
     try:
         for inputs, targets, masks in dataset.iterateMinibatches(val=False):
             print inputs.item(0)
-            for i in range(inputs.shape[0]):
-                dataset.showTensor(inputs[i])
+#==============================================================================
+#             for i in range(inputs.shape[0]):
+#                 dataset.showTensor(inputs[i])
+#==============================================================================
     except KeyboardInterrupt:
         dataset.endDataset
     dataset.endDataset()
