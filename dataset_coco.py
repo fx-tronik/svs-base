@@ -40,6 +40,7 @@ class Dataset:
 
     def initImages(self):
         #change with final dataset!
+        dataDir = self.dataDir
         trainType, valType = 'val2017', 'val2017'
         types = [trainType, valType]
         annFiles = ['{}/annotations/instances_{}.json'.format(dataDir, dataType) \
@@ -277,6 +278,7 @@ class Dataset:
         target[target > 0.0] = 1.0
         if biOutput:
             target = np.stack([target, 1.0 - target], axis = 1)
+            mask = np.stack([mask, mask], axis = 1)
         return target, mask
         
 if __name__ == "__main__":

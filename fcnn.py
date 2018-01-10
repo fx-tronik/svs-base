@@ -12,7 +12,7 @@ import theano.tensor as T
 import lasagne
 import lasagne.layers as L
 
-from utils import softmax, logSoftmax
+from theanoFunctions import softmax2, logSoftmax2
 from nn_base import nnBase
 
 class fcnn(nnBase):
@@ -32,6 +32,7 @@ class fcnn(nnBase):
         nnBase.__init__(self, modelWeights, train=train)
         
     def buildNN(self, modelFile, inputVar, train=True):
+        print 'Model building'
         pad = 0 if train else 'same'
         nonlin = lasagne.nonlinearities.rectify
         network = L.InputLayer(shape=(None, 1, None, None),
@@ -78,11 +79,11 @@ class fcnn(nnBase):
                                 pad=pad)
 
         # Final convolutional layer
-        lastNonlin = logSoftmax if train else softmax
+        lastNonlin = logSoftmax2 if train else softmax2
         network = L.Conv2DLayer(network, num_filters=2*self.numClasses, 
                                 filter_size=(1, 1), nonlinearity=lastNonlin)
         network = L.ReshapeLayer(network, ([0], self.numClasses, 2, [2], [3]))
-        network = L.NonlinearityLayer(network, logSoftmax)
+        network = L.NonlinearityLayer(network, lastNonlin)
         if modelFile:
             modelWeights = np.load(modelFile)
             modelWeights = modelWeights[modelWeights.keys()[0]]
@@ -98,4 +99,12 @@ class fcnn(nnBase):
         return self.networkScale 
        
 if __name__ == "__main__":
+    from dataset_coco import Dataset
+    dataDir = '/home/jakub/data/fxi/coco'
+    dataset  = Dataset(dataDir=dataDir, imageSize=256, targetSize=24, 
+                       batchSize=8)
     net = fcnn(train = True)
+    #net.train(dataset)
+    
+    dataset.endDataset()
+    
