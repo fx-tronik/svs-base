@@ -14,6 +14,7 @@ import lasagne.layers as L
 import cv2
 import time
 from theanoFunctions import categoricalCrossentropyLogdomain2
+from logger import Logger
 
 
 class nnBase(object):
@@ -36,6 +37,9 @@ class nnBase(object):
     def getNumClasses(self):
         raise NotImplementedError
         
+    def getNetworkName(self):
+        raise NotImplementedError
+        
     def __init__(self, modelWeights=None, train=True):
         self.inputVar = T.tensor4('input')
         self.network = self.buildNN(modelWeights, self.inputVar, train=train)
@@ -45,18 +49,20 @@ class nnBase(object):
         inputVar = self.inputVar
         tensor5 = T.TensorType('float32', (False,)*5)
         targetVar = tensor5('targets')
-        weightVar = tensor5('weights')
+        weightVar = T.tensor4('weights')
         
         model = self.network
         prediction = L.get_output(model)
         loss = categoricalCrossentropyLogdomain2(prediction, targetVar)
-        loss = lasagne.objectives.aggregate(loss, weightVar, mode='mean')
+        loss = loss * weightVar
+        loss = loss.mean()
         params = L.get_all_params(model, trainable=True)
         updates = lasagne.updates.adam(loss, params, learning_rate=learningRate)
         
         valPrediction =L.get_output(model, deterministic=True)
         valLoss = categoricalCrossentropyLogdomain2(valPrediction, targetVar)
-        valLoss = lasagne.objectives.aggregate(valLoss, weightVar, mode='mean')
+        valLoss = valLoss * weightVar
+        valLoss = valLoss.mean()
         valAcc = T.sum(T.eq(T.argmax(valPrediction, axis=2), \
                             T.argmax(targetVar, axis=2))*weightVar, 
                       dtype=theano.config.floatX)
@@ -101,7 +107,7 @@ class nnBase(object):
             valErr = 0
             valBatches = 0
             valAcc = 0
-            for batch in dataset.iterate_minibatches(True):
+            for batch in dataset.iterateMinibatches(True):
                 inputs, targets, weights = batch
                 err, acc = testFn(inputs, targets, weights)
                 valErr += err
@@ -113,6 +119,11 @@ class nnBase(object):
             print("  training loss:\t\t{:.6f}".format(trainErr / trainBatches))
             print("  validation loss:\t\t{:.6f}".format(valErr / valBatches))
             print("  validation accuracy:\t\t{:.4f} %".format(valAcc / valBatches * 100))
-        
+            
+            if ((valErr / valBatches) < bestVal) :
+                best_val = valErr / valBatches
+                # save network            
+                np.savez('models/model_{}.npz'.format(self.getNetworkName()), lasagne.layers.get_all_param_values(self.network))
+            print("lowest val %08f"%(best_val))
         
         

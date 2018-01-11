@@ -278,7 +278,6 @@ class Dataset:
         target[target > 0.0] = 1.0
         if biOutput:
             target = np.stack([target, 1.0 - target], axis = 1)
-            mask = np.stack([mask, mask], axis = 1)
         return target, mask
         
 if __name__ == "__main__":

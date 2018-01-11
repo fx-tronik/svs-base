@@ -16,6 +16,8 @@ from theanoFunctions import softmax2, logSoftmax2
 from nn_base import nnBase
 
 class fcnn(nnBase):
+    networkName = 'fullyConvolutional_v00'
+    
     numClasses = 29
     networkScale = 8
 
@@ -97,6 +99,9 @@ class fcnn(nnBase):
     @staticmethod
     def getNetworkScale(self):
         return self.networkScale 
+    
+    def getNetworkName(self):
+        return self.networkName
        
 if __name__ == "__main__":
     from dataset_coco import Dataset
