@@ -292,6 +292,6 @@ if __name__ == "__main__":
 #                 dataset.showTensor(inputs[i])
 #==============================================================================
     except KeyboardInterrupt:
-        dataset.endDataset
+        dataset.endDataset()
     dataset.endDataset()
 

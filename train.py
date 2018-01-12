@@ -15,5 +15,4 @@ dataset  = Dataset(dataDir=dataDir, imageSize=256, targetSize=24,
                    batchSize=8)
 net = fcnn(train = True)
 net.train(dataset)
-
 dataset.endDataset()

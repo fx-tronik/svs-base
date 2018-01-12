@@ -86,44 +86,60 @@ class nnBase(object):
     def train(self, dataset, numEpochs=100):
         if not hasattr(self, 'trainFn'):
             self.compileTrainFunctions()
+        logger = Logger(self.networkName)
+        logger.paramsToTrack(['trainLoss', 'valLoss', 'valAcc'])
         #best val
         bestVal = 100.0
         trainFn = self.trainFn
         testFn = self.valFn
         # Launch the training loop:
-        print("Starting training...")
-        for epoch in range(numEpochs):
-            # In each epoch, do a full pass over the training data:
-            trainErr = 0
-            trainBatches = 0
-            startTime = time.time()
+        print 'Starting training...'
+        logger.logStart()
+        try:
+            for epoch in range(numEpochs):
+                # In each epoch, do a full pass over the training data:
+                trainErr = 0
+                trainBatches = 0
+                startTime = time.time()
+                
+                for batch in dataset.iterateMinibatches():
+                    inputs, targets, weights = batch
+                    trainErr += trainFn(inputs, targets, weights)
+                    trainBatches += 1
+                
+                # And a full pass over the validation data:
+                valErr = 0
+                valBatches = 0
+                valAcc = 0
+                for batch in dataset.iterateMinibatches(True):
+                    inputs, targets, weights = batch
+                    err, acc = testFn(inputs, targets, weights)
+                    valErr += err
+                    valAcc += acc
+                    valBatches += 1
+                logger.processEpoch(trainErr / trainBatches, valErr / valBatches, 
+                                valAcc / valBatches)
+                # Then we print the results for this epoch:
+                print("Epoch {} of {} took {:.3f}s".format(epoch + 1, numEpochs, time.time() - startTime))
+                print("  training loss:\t\t{:.6f}".format(trainErr / trainBatches))
+                print("  validation loss:\t\t{:.6f}".format(valErr / valBatches))
+                print("  validation accuracy:\t\t{:.4f} %".format(valAcc / valBatches * 100))
+                
+                if ((valErr / valBatches) < bestVal) :
+                    best_val = valErr / valBatches
+                    # save network            
+                    np.savez('models/model_{}.npz'.format(self.getNetworkName()), lasagne.layers.get_all_param_values(self.network))
+                print("lowest val %08f"%(best_val))
+        except KeyboardInterrupt:
+            print 'Training stopped'
+            dataset.endDataset()
+            logger.logEnd(success=False)
+            failed = True
             
-            for batch in dataset.iterateMinibatches():
-                inputs, targets, weights = batch
-                trainErr += trainFn(inputs, targets, weights)
-                trainBatches += 1
+        if not failed:
+            dataset.endDataset()
+            logger.logEnd()
             
-            # And a full pass over the validation data:
-            valErr = 0
-            valBatches = 0
-            valAcc = 0
-            for batch in dataset.iterateMinibatches(True):
-                inputs, targets, weights = batch
-                err, acc = testFn(inputs, targets, weights)
-                valErr += err
-                valAcc += acc
-                valBatches += 1
-            
-            # Then we print the results for this epoch:
-            print("Epoch {} of {} took {:.3f}s".format(epoch + 1, numEpochs, time.time() - startTime))
-            print("  training loss:\t\t{:.6f}".format(trainErr / trainBatches))
-            print("  validation loss:\t\t{:.6f}".format(valErr / valBatches))
-            print("  validation accuracy:\t\t{:.4f} %".format(valAcc / valBatches * 100))
-            
-            if ((valErr / valBatches) < bestVal) :
-                best_val = valErr / valBatches
-                # save network            
-                np.savez('models/model_{}.npz'.format(self.getNetworkName()), lasagne.layers.get_all_param_values(self.network))
-            print("lowest val %08f"%(best_val))
+                
         
         
