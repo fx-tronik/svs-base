@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Created on Tue Jan  2 11:01:20 2018
-Plik przygotowujący obrazy ze zbioru COCO przy użyciu API i narzędzi Kerasa
+Plik przygotowujący obrazy ze zbioru COCO przy użyciu API 
 @author: jakub
 """
 from pycocotools.coco import COCO
@@ -281,6 +281,7 @@ class Dataset:
         return target, mask
     
 def testDataset(dataset, classes=[0]):
+    catNms = dataset.sCatNms + dataset.kpCatNms
     def flattenImage(inputs, targets, masks, cl, bId):
         scale=8
         inImage = inputs[bId,0]
@@ -303,8 +304,8 @@ def testDataset(dataset, classes=[0]):
         image2 = 0.5 * inImage + 0.5 * maImageCanvas
         return image1, image2
     def showImage(im1, im2, cl, bId):
-        winTarName = 'targets_{}'.format(cl)
-        winMasName = 'masks_{}'.format(cl)
+        winTarName = 'targets_{}'.format(catNms[cl])
+        winMasName = 'masks_{}'.format(catNms[cl])
         cv2.namedWindow(winTarName, cv2.WINDOW_NORMAL)
         cv2.namedWindow(winMasName, cv2.WINDOW_NORMAL)
         cv2.imshow(winTarName, im1)
@@ -313,11 +314,11 @@ def testDataset(dataset, classes=[0]):
         cv2.waitKey(0)
         cv2.destroyWindow(winTarName)
         cv2.destroyWindow(winMasName)
+
     for cl in classes:
         for inputs, targets, masks in dataset.iterateMinibatches(val=False):
             for bId in range(inputs.shape[0]):
                 if np.max(targets[bId, cl,0]) > 0.0:
-                    print 'OK', np.max(targets[bId, cl,0])
                     im1, im2 = flattenImage(inputs, targets, masks, cl, bId)
                     showImage(im1, im2, cl, bId)
                 
