@@ -323,7 +323,7 @@ def testDataset(dataset, classes=[0]):
                     showImage(im1, im2, cl, bId)
                 
 if __name__ == "__main__":
-    dataDir = '/home/jakub/data/fxi/coco'
+    dataDir = '/home/jakub/data/coco'
     dataset  = Dataset(dataDir=dataDir, imageSize=256, targetSize=24, 
                        batchSize=8)
     testDataset(dataset, classes = [22, 23])
