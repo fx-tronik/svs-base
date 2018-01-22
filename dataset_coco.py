@@ -215,6 +215,8 @@ class Dataset:
             tCont.append(targets)
             mCont.append(masks)
             imgIter+=1
+            if imgIter >= len(imgIds):
+                imgIter = 0
             while (len(iCont) >= batchSize):
                 iB, iCont = popContainer(iCont, batchSize)
                 tB, tCont = popContainer(tCont, batchSize)

@@ -94,7 +94,7 @@ class Logger:
         best = [np.min(self.container[key]) for key in toSave]
         bestStr = '{:.3f}, {:.3f}, {:.3f}'.format(best[0], best[1], best[2])
         with open(logPath, 'a') as f:
-            f.write('{},{},{},{},{}'.format(self.expId, self.startDate, 
+            f.write('{},{},{},{},{}\n'.format(self.expId, self.startDate, 
                     currentTime(), self.success, bestStr))
                 
 if __name__ == "__main__":
