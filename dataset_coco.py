@@ -6,7 +6,7 @@ Plik przygotowujący obrazy ze zbioru COCO przy użyciu API
 @author: jakub
 """
 from pycocotools.coco import COCO
-from pycocotools import mask as maskUtils
+#from pycocotools import mask as maskUtils
 import numpy as np
 import skimage.io as io
 import matplotlib.pyplot as plt
@@ -156,6 +156,21 @@ class Dataset:
         wScaled, hScaled = [int(dim * scale) for dim in [w, h]]
         stride = [np.random.randint(0, dim - imageSize+1) for dim in [wScaled, hScaled]]
         return scale, stride
+    
+    def cutPatch2(self, I, scale=1.0, stride=[0, 0]):
+        imageSize = self.imageSize
+        if len(np.shape(I)) == 2:
+            I = np.expand_dims(I, axis=0)
+        patch = []
+        sx = float(stride[1]) / scale
+        sy = float(stride[0]) / scale
+        beforeSize = float(imageSize) / scale
+        for ch in I:
+            ch = ch[int(sx):int(sx+beforeSize), int(sy):int(sy+beforeSize)]
+            ch = cv2.resize(ch, (int(imageSize), int(imageSize)), interpolation=cv2.INTER_NEAREST)
+            patch.append(ch)
+        return np.stack(patch)
+            
 
     def cutPatch(self, I, scale=1.0, stride=[0, 0]):
         imageSize = self.imageSize
@@ -163,7 +178,7 @@ class Dataset:
             I = np.expand_dims(I, axis=0)
         patch = []
         for ch in I:
-            ch = cv2.resize(ch, None, fx=scale, fy=scale)
+            ch = cv2.resize(ch, None, fx=scale, fy=scale, interpolation=cv2.INTER_NEAREST)
             ch = ch[stride[1]:stride[1]+imageSize, stride[0]:stride[0]+imageSize]
             patch.append(ch)
         patch = np.stack(patch)
@@ -188,15 +203,18 @@ class Dataset:
             return np.stack(data, axis = 0), container
         iCont, tCont, mCont = [], [], []
         while(1):
+            #start = time.time()
             imgId = imgIds[imgIter]
             img = workingCocos[0].loadImgs(imgId)[0] #only one image
             annIds = workingCocos[0].getAnnIds(imgIds=img['id'])
             anns = workingCocos[0].loadAnns(annIds)
             addSuperCat(anns)
-                
+            #print 'COCOS processing took {} s'.format(time.time() - start)
+            #start = time.time()
             imgPath = os.path.join(dataDir, dataType, img['file_name'])
             image = cv2.imread(imgPath, 0)
             image = image.astype(np.float32) / 255.0
+            #print 'LOAD image took {} s'.format(time.time() - start)
             
             iTargets = self.generateInstancesTargets(img, anns, workingCocos[0])
             kpAnns = []
@@ -208,9 +226,12 @@ class Dataset:
             masks = self.generateMask(targets)
             
             scale, stride = self.scaleStride(img, anns)
-            [image, targets, masks] = map(lambda t: self.cutPatch(t, scale, stride), 
+            start = time.time()
+            [image, targets, masks] = map(lambda t: self.cutPatch2(t, scale, stride), 
                                           [image, targets, masks])
+            #print 'Targets generating took {} s'.format(time.time() - start)
             targets, masks = self.formatTarget(targets, masks, biOutput=self.biOutput)
+
             iCont.append(image)
             tCont.append(targets)
             mCont.append(masks)
@@ -273,10 +294,18 @@ class Dataset:
         imageSize = self.imageSize
         networkScale = self.networkScale
         margin = (imageSize / networkScale - targetSize) / 2
+        scaledMargin = (imageSize - targetSize * networkScale) /2
         target, mask = [np.stack([cv2.resize(ch, None, fx=1.0 / networkScale, \
                                              fy=1.0 / networkScale, \
                                              interpolation=cv2.INTER_NEAREST)[margin:margin+targetSize, margin:margin+targetSize]\
                                 for ch in tensor]) for tensor in [target, mask]]
+        #another version, same time       
+#==============================================================================
+#         target, mask = [np.stack([cv2.resize(ch[scaledMargin:-scaledMargin, scaledMargin:-scaledMargin],\
+#                              (targetSize, targetSize),   
+#                              interpolation=cv2.INTER_NEAREST)\
+#                 for ch in tensor]) for tensor in [target, mask]]
+#==============================================================================
         target[target > 0.0] = 1.0
         if biOutput:
             target = np.stack([target, 1.0 - target], axis = 1)
@@ -328,7 +357,8 @@ if __name__ == "__main__":
     dataDir = '/home/jakub/data/coco'
     dataset  = Dataset(dataDir=dataDir, imageSize=256, targetSize=24, 
                        batchSize=8)
-    testDataset(dataset, classes = [22, 23])
+    #testDataset(dataset, classes = [22, 23])
+    start = time.time()
     try:
         for inputs, targets, masks in dataset.iterateMinibatches(val=False):
             print inputs.item(0)
@@ -339,4 +369,5 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         dataset.endDataset()
     dataset.endDataset()
+    print 'It took {} sconds'.format(time.time() - start)
 

@@ -16,6 +16,8 @@ import time
 from theanoFunctions import categoricalCrossentropyLogdomain2
 from logger import Logger
 
+allCats = np.load('categories.npz')
+allCats = list(allCats[allCats.keys()[0]])
 
 class nnBase(object):
     def buildNN(self, modelFile, inputVar):
@@ -67,26 +69,35 @@ class nnBase(object):
                             T.argmax(targetVar, axis=2))*weightVar, 
                       dtype=theano.config.floatX)
         binTar = targetVar > 0.5
-        binTar = binTar[:,:,0]
         binPred = T.exp(valPrediction) > 0.5
-        binPred = binPred[:,:,0]
-        TPs = binTar * binPred
-        TPs = T.cast(TPs.sum(), 'float32')
-        FNs = binTar * (1 - binPred)
-        FNs = T.cast(FNs.sum(), 'float32')
-        FPs = (1 - binTar) * binPred
-        FPs = T.cast(FPs.sum(), 'float32')
-        pre = T.switch(T.gt(TPs + FNs, 0.0), TPs / (TPs + FNs), 0.0)
-        rec = T.switch(T.gt(TPs + FPs, 0.0), TPs / (TPs + FPs), 0.0)
-        Fsc = T.switch(T.and_(T.gt(pre, 0.0), T.gt(rec, 0.0)),
-                       2 * (pre * rec) / (pre + rec),0.0)
+        
+        statsPerClass = []
+        for cat in range(len(allCats)):
+            binClTar = binTar[:, cat, 0]
+            binClPred = binPred[:, cat, 0]
+            TPs = binClTar * binClPred
+            TPs = T.cast(TPs.sum(), 'float32')
+            FNs = binClTar * (1 - binClPred)
+            FNs = T.cast(FNs.sum(), 'float32')
+            FPs = (1 - binClTar) * binClPred
+            FPs = T.cast(FPs.sum(), 'float32')
+            pre = T.switch(T.gt(TPs + FNs, 0.0), TPs / (TPs + FNs), 0.0)
+            rec = T.switch(T.gt(TPs + FPs, 0.0), TPs / (TPs + FPs), 0.0)
+            Fsc = T.switch(T.and_(T.gt(pre, 0.0), T.gt(rec, 0.0)),
+                           2 * (pre * rec) / (pre + rec),0.0)
+            statsPerClass.append(T.stack([TPs, FPs, FNs, pre, rec, Fsc], axis=0))
+        statsPerClass = T.stack(statsPerClass, axis = 1)
+        statsPerClass = statsPerClass.T
+
+
+
         
         valAcc /= T.sum(weightVar)  
         
         trainFn = theano.function([inputVar, targetVar, weightVar], loss, 
                                   updates=updates, allow_input_downcast=True)
         valFn = theano.function([inputVar, targetVar, weightVar], 
-                                 [valLoss, valAcc, pre, rec, Fsc], 
+                                 [valLoss, valAcc, statsPerClass], 
                                  allow_input_downcast=True)
         self.trainFn = trainFn
         self.valFn = valFn
@@ -100,6 +111,8 @@ class nnBase(object):
                                     allow_input_downcast=True)
         self.forwardFn = forwardFn
     def train(self, dataset, numEpochs=100):
+        global allCats
+        failed = False
         if not hasattr(self, 'trainFn'):
             self.compileTrainFunctions()
         logger = Logger(self.networkName)
@@ -127,28 +140,28 @@ class nnBase(object):
                 valErr = 0
                 valBatches = 0
                 valAcc = 0
-                valRec = 0.0
-                valPre = 0.0
-                valFsc = 0.0
+                epochStats = np.zeros((len(allCats), 6))
                 for batch in dataset.iterateMinibatches(True):
                     inputs, targets, weights = batch
-                    err, acc, pre, rec, Fsc = testFn(inputs, targets, weights)
+                    err, acc, stats= testFn(inputs, targets, weights)
                     valErr += err
                     valAcc += acc
-                    valRec += rec
-                    valPre += pre
-                    valFsc = Fsc
+                    epochStats += stats
                     valBatches += 1
                 logger.processEpoch(trainErr / trainBatches, valErr / valBatches, 
                                 valAcc / valBatches)
+                epochStats /= valBatches
                 # Then we print the results for this epoch:
                 print("Epoch {} of {} took {:.3f}s".format(epoch + 1, numEpochs, time.time() - startTime))
                 print("  training loss:\t\t{:.6f}".format(trainErr / trainBatches))
                 print("  validation loss:\t\t{:.6f}".format(valErr / valBatches))
                 print("  validation accuracy:\t\t{:.2f} %".format(valAcc / valBatches * 100))
-                print("  validation precissi:\t\t{:.2f} %".format(valPre / valBatches * 100))
-                print("  validation recall  :\t\t{:.2f} %".format(valRec / valBatches * 100))
-                print("  validation F1Score :\t\t{:.2f} %".format(valFsc / valBatches * 100))
+                for i, cat in enumerate(allCats):
+                    TP, FP, FN, pre, rec, F1 = stats[i]
+                    print '{}'.format(cat)
+                    print("  validation precissi:\t\t{:.2f} %".format(pre * 100))
+                    print("  validation recall  :\t\t{:.2f} %".format(rec  * 100))
+                    print("  validation F1Score :\t\t{:.2f} %".format(F1  * 100))
                 
                 if ((valErr / valBatches) < bestVal) :
                     bestVal = valErr / valBatches

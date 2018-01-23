@@ -13,6 +13,6 @@ dataDir = '/home/jakub/data/coco'
 
 dataset  = Dataset(dataDir=dataDir, imageSize=256, targetSize=24, 
                    batchSize=8)
-net = fcnn(train = True)
+net = fcnn(train = True, modelWeights='/home/jakub/workspace/fx-industry/results/models/model_fullyConvolutional_v00.npz')
 net.train(dataset)
 dataset.endDataset()

@@ -16,7 +16,7 @@ from theanoFunctions import softmax2, logSoftmax2
 from nn_base import nnBase
 
 class fcnn(nnBase):
-    networkName = 'fullyConvolutional_v00'
+    networkName = 'fullyConvolutional_v00_pretrained'
     
     numClasses = 29
     networkScale = 8

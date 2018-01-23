@@ -18,7 +18,7 @@ from theanoFunctions import softmax2, logSoftmax2, categoricalCrossentropyLogdom
 from nn_base import nnBase
 
 class fcnn(nnBase):
-    networkName = 'fc_autoenkoder_v00'
+    networkName = 'fc_autoenkoder_v00_pretrained'
     
     numClasses = 29
     networkScale = 8
@@ -202,10 +202,10 @@ class fcnn(nnBase):
                 print("  validation accuracy:\t\t{:.4f} %".format(valAcc / valBatches * 100))
                 
                 if ((valErr / valBatches) < bestVal) :
-                    best_val = valErr / valBatches
+                    bestVal = valErr / valBatches
                     # save network            
                     np.savez('models/model_{}.npz'.format(self.getNetworkName()), lasagne.layers.get_all_param_values(self.network))
-                print("lowest val %08f"%(best_val))
+                print("lowest val %08f"%(bestVal))
         except KeyboardInterrupt:
             print 'Training stopped'
             dataset.endDataset()
