@@ -9,7 +9,7 @@ Train script
 from dataset_coco import Dataset
 from fcnn import fcnn 
 
-dataDir = '/home/jakub/data/fxi/coco'
+dataDir = '/home/jakub/data/coco'
 
 dataset  = Dataset(dataDir=dataDir, imageSize=256, targetSize=24, 
                    batchSize=8)

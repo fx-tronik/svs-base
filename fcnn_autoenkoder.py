@@ -99,6 +99,7 @@ class fcnn(nnBase):
             modelWeights = np.load(modelFile)
             modelWeights = modelWeights[modelWeights.keys()[0]]
             L.set_all_param_values(network, modelWeights)
+            print 'ZAŁADOWANO WAGI'
 
         return network, sp4
     @staticmethod

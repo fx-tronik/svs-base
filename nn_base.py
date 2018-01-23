@@ -66,12 +66,28 @@ class nnBase(object):
         valAcc = T.sum(T.eq(T.argmax(valPrediction, axis=2), \
                             T.argmax(targetVar, axis=2))*weightVar, 
                       dtype=theano.config.floatX)
+        binTar = targetVar > 0.5
+        binTar = binTar[:,:,0]
+        binPred = T.exp(valPrediction) > 0.5
+        binPred = binPred[:,:,0]
+        TPs = binTar * binPred
+        TPs = T.cast(TPs.sum(), 'float32')
+        FNs = binTar * (1 - binPred)
+        FNs = T.cast(FNs.sum(), 'float32')
+        FPs = (1 - binTar) * binPred
+        FPs = T.cast(FPs.sum(), 'float32')
+        pre = T.switch(T.gt(TPs + FNs, 0.0), TPs / (TPs + FNs), 0.0)
+        rec = T.switch(T.gt(TPs + FPs, 0.0), TPs / (TPs + FPs), 0.0)
+        Fsc = T.switch(T.and_(T.gt(pre, 0.0), T.gt(rec, 0.0)),
+                       2 * (pre * rec) / (pre + rec),0.0)
+        
         valAcc /= T.sum(weightVar)  
         
         trainFn = theano.function([inputVar, targetVar, weightVar], loss, 
                                   updates=updates, allow_input_downcast=True)
         valFn = theano.function([inputVar, targetVar, weightVar], 
-                                 [valLoss, valAcc], allow_input_downcast=True)
+                                 [valLoss, valAcc, pre, rec, Fsc], 
+                                 allow_input_downcast=True)
         self.trainFn = trainFn
         self.valFn = valFn
         
@@ -111,11 +127,17 @@ class nnBase(object):
                 valErr = 0
                 valBatches = 0
                 valAcc = 0
+                valRec = 0.0
+                valPre = 0.0
+                valFsc = 0.0
                 for batch in dataset.iterateMinibatches(True):
                     inputs, targets, weights = batch
-                    err, acc = testFn(inputs, targets, weights)
+                    err, acc, pre, rec, Fsc = testFn(inputs, targets, weights)
                     valErr += err
                     valAcc += acc
+                    valRec += rec
+                    valPre += pre
+                    valFsc = Fsc
                     valBatches += 1
                 logger.processEpoch(trainErr / trainBatches, valErr / valBatches, 
                                 valAcc / valBatches)
@@ -123,13 +145,16 @@ class nnBase(object):
                 print("Epoch {} of {} took {:.3f}s".format(epoch + 1, numEpochs, time.time() - startTime))
                 print("  training loss:\t\t{:.6f}".format(trainErr / trainBatches))
                 print("  validation loss:\t\t{:.6f}".format(valErr / valBatches))
-                print("  validation accuracy:\t\t{:.4f} %".format(valAcc / valBatches * 100))
+                print("  validation accuracy:\t\t{:.2f} %".format(valAcc / valBatches * 100))
+                print("  validation precissi:\t\t{:.2f} %".format(valPre / valBatches * 100))
+                print("  validation recall  :\t\t{:.2f} %".format(valRec / valBatches * 100))
+                print("  validation F1Score :\t\t{:.2f} %".format(valFsc / valBatches * 100))
                 
                 if ((valErr / valBatches) < bestVal) :
-                    best_val = valErr / valBatches
+                    bestVal = valErr / valBatches
                     # save network            
                     np.savez('models/model_{}.npz'.format(self.getNetworkName()), lasagne.layers.get_all_param_values(self.network))
-                print("lowest val %08f"%(best_val))
+                    print('Model saved, lowest val {:.6f}'.format(bestVal))
         except KeyboardInterrupt:
             print 'Training stopped'
             dataset.endDataset()

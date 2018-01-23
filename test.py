@@ -9,6 +9,8 @@ import numpy as np
 import cv2
 import datetime
 import os
+import glob
+from fcnn_autoenkoder import fcnn
 
 allCats = np.load('categories.npz')
 allCats = list(allCats[allCats.keys()[0]])
@@ -154,9 +156,33 @@ def saveResults(inputs, detMap, thresholds, scale = 8,
         imId +=1
         cv2.imwrite(os.path.join(outputDir, '{}.png'.format(imId)), image)
         
-    
-
+class Tester(fcnn):
+    def __init__(self, modelWeights=None, train=True):
+        fcnn.__init__(self, modelWeights, train=train)
+        self.compileTestFunctions()
+    def readData(self, testData):
+        imgExts = ['jpg', 'png', 'JPG', 'PNG', 'bmp']
+        imgFiles = []
+        for ext in imgExts:
+            imgFiles.extend(glob.glob(os.path.join(testData, '*.{}'.format(ext))))
+        images = []
+        for imgFile in imgFiles:
+            image = cv2.imread(imgFile, 0)
+            image = image.astype(np.float32) / 255.0
+            image = np.expand_dims(image, axis=0)
+            image = np.expand_dims(image, axis=0)
+            images.append(image)
+        return images
+    def processData(self, testData):
+        images = self.readData(testData)
+        predictions = []
+        for img in images:
+            prediction = self.forwardFn(img)[0]
+            predictions.append(prediction)
+        return images, predictions
 if __name__ == "__main__":
+
+
     from dataset_coco import Dataset
     dataDir = '/home/jakub/data/coco'
     outputDir = '/home/jakub/data/results'
@@ -167,12 +193,20 @@ if __name__ == "__main__":
     dataset  = Dataset(dataDir=dataDir, imageSize=256, targetSize=24, 
                        batchSize=8)
     catNms = dataset.sCatNms + dataset.kpCatNms
-    thresholds = {catNm:0.5 for catNm in catNms}
+    thresholds = {catNm:0.95 for catNm in catNms}
     #put special thresholds here:
-    thresholds['person'] = 0.75
-    for epoch in range(15):
-        for inputs, targets, masks in dataset.iterateMinibatches(val=False):
-            saveResults(inputs, targets, thresholds, drawBoxesCats=['person'],
-                        drawCntsCats=kpCats, outputDir=outputDir)
+    thresholds['person'] = 0.99
+    
+    modelWeights = '/home/jakub/workspace/fx-industry/results/models/model_fc_autoenkoder_v00.npz'
+    testData = '/home/jakub/data/ownDataT'
+    tester = Tester(modelWeights, train=True)
+    images, detections = tester.processData(testData)
+    for image, detection in zip(images, detections):
+        detection = np.expand_dims(detection, axis=0)
+        saveResults(image, detection, thresholds, drawBoxesCats=['person'],
+                    drawCntsCats=kpCats, outputDir=outputDir)
     dataset.endDataset()
+    
+    
+    
 
