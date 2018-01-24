@@ -75,29 +75,41 @@ class Dataset:
 
 
     def generateInstancesTargets(self, img, anns, coco):
+        networkScale = self.networkScale
         sCatNms = self.sCatNms
         w, h = img['width'], img['height']
-        targets = [np.zeros((h, w), dtype=np.float32) for _ in sCatNms]
+        ws, hs = [dim / networkScale for dim in [w, h]]
+        targets = [np.zeros((hs, ws), dtype=np.float32) for _ in sCatNms]
+        #targets = [np.zeros((h, w), dtype=np.float32) for _ in sCatNms]
         for ann in anns:
             sCatId = ann['supercategory_id']
-            targets[sCatId] += coco.annToMask(ann).astype(np.float32)
+            
+            try:
+                ann['segmentation'] = map(lambda x: [el / networkScale for el in x], ann['segmentation'])
+                tempMask = coco.annToMask(ann).astype(np.float32)[:hs,:ws]
+            except TypeError:
+               tempMask = coco.annToMask(ann).astype(np.float32)
+               tempMask = cv2.resize(tempMask,(ws, hs), interpolation=cv2.INTER_NEAREST)
+            targets[sCatId] += coco.annToMask(ann).astype(np.float32)[:hs,:ws]
         instTargets = np.stack(targets)
         return instTargets
 
-    def generateKeypointsTargets(self, img, anns, tarDim=2):
+    def generateKeypointsTargets(self, img, anns, tarDim=1):
         #generate target from person keypoints annotation
         #targets are point, but extended circles with radius tarDim
         kpCatNms = self.kpCatNms
+        networkScale = self.networkScale
         w, h = img['width'], img['height']
-        targets = [np.zeros((h, w), dtype=np.float32) for _ in kpCatNms]
+        ws, hs = [dim / networkScale for dim in [w, h]]
+        targets = [np.zeros((hs, ws), dtype=np.float32) for _ in kpCatNms]
         for ann in anns:
             if 'keypoints' in ann and type(ann['keypoints']) == list:
                 # turn skeleton into zero-based index
                 #sks = np.array(coco_kps.loadCats(ann['category_id'])[0]['skeleton'])-1
                 #kpn = coco_kps.loadCats(ann['category_id'])[0]['keypoints']
                 kps = np.array(ann['keypoints'])
-                x = kps[0::3]
-                y = kps[1::3]
+                x = kps[0::3] / networkScale
+                y = kps[1::3] / networkScale
                 v = kps[2::3]
                 for i, (xCor, yCor, vis) in enumerate(zip(x, y, v)):
                     if np.all([xCor, yCor, vis]):
@@ -157,18 +169,30 @@ class Dataset:
         stride = [np.random.randint(0, dim - imageSize+1) for dim in [wScaled, hScaled]]
         return scale, stride
     
-    def cutPatch2(self, I, scale=1.0, stride=[0, 0]):
+    def cutPatch2(self, I, scale=1.0, stride=[0, 0], alreadyNetworkScaled = False):
+        networkScale = self.networkScale
         imageSize = self.imageSize
+        tarSize = self.imageSize / networkScale
         if len(np.shape(I)) == 2:
             I = np.expand_dims(I, axis=0)
         patch = []
         sx = float(stride[1]) / scale
         sy = float(stride[0]) / scale
         beforeSize = float(imageSize) / scale
-        for ch in I:
-            ch = ch[int(sx):int(sx+beforeSize), int(sy):int(sy+beforeSize)]
-            ch = cv2.resize(ch, (int(imageSize), int(imageSize)), interpolation=cv2.INTER_NEAREST)
-            patch.append(ch)
+        if alreadyNetworkScaled:
+            
+            nsx = float(stride[1]) / (scale * networkScale)
+            nsy = float(stride[0]) / (scale * networkScale)
+            sBeforeSize = float(tarSize) / scale
+            for ch in I:
+                ch = ch[int(np.rint(nsx)):int(np.rint(nsx+sBeforeSize)), int(np.rint(nsy)):int(np.rint(nsy+sBeforeSize))]
+                ch = cv2.resize(ch, (int(tarSize), int(tarSize)), interpolation=cv2.INTER_NEAREST)
+                patch.append(ch)
+        else:
+            for ch in I:
+                ch = ch[int(sx):int(sx+beforeSize), int(sy):int(sy+beforeSize)]
+                ch = cv2.resize(ch, (int(imageSize), int(imageSize)), interpolation=cv2.INTER_NEAREST)
+                patch.append(ch)
         return np.stack(patch)
             
 
@@ -224,11 +248,11 @@ class Dataset:
             kpTargets = self.generateKeypointsTargets(img, kpAnns)
             targets = np.append(iTargets, kpTargets, axis = 0)
             masks = self.generateMask(targets)
-            
             scale, stride = self.scaleStride(img, anns)
             start = time.time()
-            [image, targets, masks] = map(lambda t: self.cutPatch2(t, scale, stride), 
-                                          [image, targets, masks])
+            image = self.cutPatch2(image, scale, stride)
+            [targets, masks] = map(lambda t: self.cutPatch2(t, scale, stride, alreadyNetworkScaled=True), 
+                                          [targets, masks])
             #print 'Targets generating took {} s'.format(time.time() - start)
             targets, masks = self.formatTarget(targets, masks, biOutput=self.biOutput)
 
@@ -295,10 +319,14 @@ class Dataset:
         networkScale = self.networkScale
         margin = (imageSize / networkScale - targetSize) / 2
         scaledMargin = (imageSize - targetSize * networkScale) /2
-        target, mask = [np.stack([cv2.resize(ch, None, fx=1.0 / networkScale, \
-                                             fy=1.0 / networkScale, \
-                                             interpolation=cv2.INTER_NEAREST)[margin:margin+targetSize, margin:margin+targetSize]\
-                                for ch in tensor]) for tensor in [target, mask]]
+        target = target[:,margin:-margin, margin:-margin]
+        mask = mask[:,margin:-margin, margin:-margin]
+#==============================================================================
+#         target, mask = [np.stack([cv2.resize(ch, None, fx=1.0 / networkScale, \
+#                                              fy=1.0 / networkScale, \
+#                                              interpolation=cv2.INTER_NEAREST)[margin:margin+targetSize, margin:margin+targetSize]\
+#                                 for ch in tensor]) for tensor in [target, mask]]
+#==============================================================================
         #another version, same time       
 #==============================================================================
 #         target, mask = [np.stack([cv2.resize(ch[scaledMargin:-scaledMargin, scaledMargin:-scaledMargin],\
@@ -357,7 +385,7 @@ if __name__ == "__main__":
     dataDir = '/home/jakub/data/coco'
     dataset  = Dataset(dataDir=dataDir, imageSize=256, targetSize=24, 
                        batchSize=8)
-    #testDataset(dataset, classes = [22, 23])
+    testDataset(dataset, classes = [22, 23])
     start = time.time()
     try:
         for inputs, targets, masks in dataset.iterateMinibatches(val=False):
