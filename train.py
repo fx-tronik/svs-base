@@ -6,13 +6,14 @@ Train script
 @author: jakub
 """
 
-from dataset_coco import Dataset
+#from dataset_coco import Dataset
+from datasetMPII import Dataset
 from fcnn import fcnn 
 
-dataDir = '/home/jakub/data/coco'
+dataDir = '/home/jakub/data/MPII'
 
 dataset  = Dataset(dataDir=dataDir, imageSize=256, targetSize=24, 
                    batchSize=8)
-net = fcnn(train = True, modelWeights='/home/jakub/workspace/fx-industry/results/models/model_fullyConvolutional_v00.npz')
+net = fcnn(train = True)
 net.train(dataset)
 dataset.endDataset()

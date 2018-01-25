@@ -11,12 +11,11 @@ import theano
 import theano.tensor as T
 import lasagne
 import lasagne.layers as L
-import cv2
 import time
 from theanoFunctions import categoricalCrossentropyLogdomain2
 from logger import Logger
-
-allCats = np.load('categories.npz')
+#allCats = np.load('categories.npz')
+allCats = np.load('categoriesMPII.npz')
 allCats = list(allCats[allCats.keys()[0]])
 
 class nnBase(object):

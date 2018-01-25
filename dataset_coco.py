@@ -107,6 +107,7 @@ class Dataset:
                 # turn skeleton into zero-based index
                 #sks = np.array(coco_kps.loadCats(ann['category_id'])[0]['skeleton'])-1
                 #kpn = coco_kps.loadCats(ann['category_id'])[0]['keypoints']
+                tarDim = np.sqrt(ann['area']) / 10 / networkScale 
                 kps = np.array(ann['keypoints'])
                 x = kps[0::3] / networkScale
                 y = kps[1::3] / networkScale
@@ -118,7 +119,7 @@ class Dataset:
                         vis = 1 -> not visible but labeled
                         vis = 2 -> visible and labeled
                         '''
-                        cv2.circle(targets[i], (xCor, yCor), tarDim, vis, -1)
+                        cv2.circle(targets[i], (xCor, yCor), int(tarDim), vis, -1)
         kpTargets = np.stack(targets)
         return kpTargets          
 
@@ -154,7 +155,7 @@ class Dataset:
         minUnderscale = self.minUnderscale
         minLabelArea = self.minLabelArea
         imageSize = self.imageSize
-        scale = minUnderscale + (maxUpscale - minUnderscale)*random.random()
+        scale = minUnderscale + (scale - minUnderscale)*random.random()
         w, h = img['width'], img['height']
         labelAreas = [ann['area'] for ann in anns]
         if labelAreas:
@@ -165,7 +166,7 @@ class Dataset:
         scale = max([scale, minLabelArea / minImgLabel])
         scale = np.min([scale, maxUpscale])
         scale = np.max([scale] + [float(imageSize) / float(dim) for dim in [w, h]])
-        wScaled, hScaled = [int(dim * scale) for dim in [w, h]]
+        wScaled, hScaled = [int(np.ceil(dim * scale)) for dim in [w, h]]
         stride = [np.random.randint(0, dim - imageSize+1) for dim in [wScaled, hScaled]]
         return scale, stride
     
@@ -305,7 +306,7 @@ class Dataset:
         cv2.waitKey(0)
         cv2.destroyWindow(winName)
     def iterateMinibatches(self, val = False):
-        valBatches = 1
+        valBatches = 8
         queue = self.valQ if val else self.trainQ
         batches = valBatches if val else 20 * valBatches
         for batchId in range(batches):
@@ -384,18 +385,19 @@ def testDataset(dataset, classes=[0]):
 if __name__ == "__main__":
     dataDir = '/home/jakub/data/coco'
     dataset  = Dataset(dataDir=dataDir, imageSize=256, targetSize=24, 
-                       batchSize=8)
-    testDataset(dataset, classes = [22, 23])
+                       batchSize=8, minLabelArea=16)
+    testDataset(dataset, classes = [17])
     start = time.time()
-    try:
-        for inputs, targets, masks in dataset.iterateMinibatches(val=False):
-            print inputs.item(0)
-#==============================================================================
-#             for i in range(inputs.shape[0]):
-#                 dataset.showTensor(inputs[i])
-#==============================================================================
-    except KeyboardInterrupt:
-        dataset.endDataset()
+    for epoch in range(1):
+        try:
+            for inputs, targets, masks in dataset.iterateMinibatches(val=False):
+                pass
+    #==============================================================================
+    #             for i in range(inputs.shape[0]):
+    #                 dataset.showTensor(inputs[i])
+    #==============================================================================
+        except KeyboardInterrupt:
+            dataset.endDataset()
     dataset.endDataset()
     print 'It took {} sconds'.format(time.time() - start)
 
