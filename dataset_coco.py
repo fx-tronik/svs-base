@@ -5,6 +5,8 @@ Created on Tue Jan  2 11:01:20 2018
 Plik przygotowujący obrazy ze zbioru COCO przy użyciu API 
 @author: jakub
 """
+import matplotlib
+matplotlib.use('AGG')
 from pycocotools.coco import COCO
 #from pycocotools import mask as maskUtils
 import numpy as np
@@ -52,8 +54,8 @@ class Dataset:
         sCatNms = sorted(list(set([cat['supercategory'] for cat in cats])))
         kpCatNms = cocos[2].loadCats(1)[0]['keypoints']
         weights = np.ones(29) #class weights (person and keypoints more important)
-        weights[sCatNms.index('person')] = 2.0
-        weights[-len(kpCatNms):] = 2.0
+        weights[sCatNms.index('person')] = 10
+        weights[-len(kpCatNms):] = 50
         borders = [False for _ in range(29)]
         borders[sCatNms.index('person')] = 'strict'
         borders[-len(kpCatNms):] = ['fuzzy' for _ in range(len(kpCatNms))]
@@ -77,22 +79,29 @@ class Dataset:
     def generateInstancesTargets(self, img, anns, coco):
         networkScale = self.networkScale
         sCatNms = self.sCatNms
+        kpCatNms = self.kpCatNms
         w, h = img['width'], img['height']
         ws, hs = [dim / networkScale for dim in [w, h]]
         targets = [np.zeros((hs, ws), dtype=np.float32) for _ in sCatNms]
+        kpMasks = np.zeros((hs, ws), dtype=np.float32) 
         #targets = [np.zeros((h, w), dtype=np.float32) for _ in sCatNms]
         for ann in anns:
             sCatId = ann['supercategory_id']
-            
             try:
                 ann['segmentation'] = map(lambda x: [el / networkScale for el in x], ann['segmentation'])
                 tempMask = coco.annToMask(ann).astype(np.float32)[:hs,:ws]
+                if ann['iscrowd'] == 1:
+                    tempKpMask = np.copy(tempMask)
             except TypeError:
                tempMask = coco.annToMask(ann).astype(np.float32)
                tempMask = cv2.resize(tempMask,(ws, hs), interpolation=cv2.INTER_NEAREST)
-            targets[sCatId] += coco.annToMask(ann).astype(np.float32)[:hs,:ws]
+               tempKpMask = np.copy(tempMask)
+            targets[sCatId] += tempMask#coco.annToMask(ann).astype(np.float32)[:hs,:ws]
+            if ann['iscrowd'] == 1:
+                kpMasks += tempKpMask
         instTargets = np.stack(targets)
-        return instTargets
+        kpMasks = 1.0 - np.stack(len(kpCatNms) * [kpMasks])
+        return instTargets, kpMasks
 
     def generateKeypointsTargets(self, img, anns, tarDim=1):
         #generate target from person keypoints annotation
@@ -215,6 +224,7 @@ class Dataset:
         addSuperCat = self.addSuperCat
         personInAnns = self.personInAnns
         batchSize = self.batchSize
+        kpCatNms = self.kpCatNms
         workingCocos = cocos[val::2] #instances and person keypoints
         dataType = types[val]
         imgIds = workingCocos[0].getImgIds()
@@ -241,7 +251,7 @@ class Dataset:
             image = image.astype(np.float32) / 255.0
             #print 'LOAD image took {} s'.format(time.time() - start)
             
-            iTargets = self.generateInstancesTargets(img, anns, workingCocos[0])
+            iTargets, kpMasks = self.generateInstancesTargets(img, anns, workingCocos[0])
             kpAnns = []
             if personInAnns(anns):
                 kpAnnIds = workingCocos[1].getAnnIds(imgIds=img['id'])
@@ -249,6 +259,7 @@ class Dataset:
             kpTargets = self.generateKeypointsTargets(img, kpAnns)
             targets = np.append(iTargets, kpTargets, axis = 0)
             masks = self.generateMask(targets)
+            masks[-len(kpCatNms):] *= kpMasks 
             scale, stride = self.scaleStride(img, anns)
             start = time.time()
             image = self.cutPatch2(image, scale, stride)
