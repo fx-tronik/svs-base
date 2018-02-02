@@ -397,7 +397,7 @@ if __name__ == "__main__":
     dataDir = '/home/jakub/data/coco'
     dataset  = Dataset(dataDir=dataDir, imageSize=256, targetSize=24, 
                        batchSize=8, minLabelArea=16)
-    testDataset(dataset, classes = [17])
+    #testDataset(dataset, classes = [17])
     start = time.time()
     for epoch in range(1):
         try:
