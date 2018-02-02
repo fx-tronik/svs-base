@@ -317,9 +317,9 @@ class Dataset:
         cv2.waitKey(0)
         cv2.destroyWindow(winName)
     def iterateMinibatches(self, val = False):
-        valBatches = 8
+        valBatches = 1
         queue = self.valQ if val else self.trainQ
-        batches = valBatches if val else 20 * valBatches
+        batches = valBatches if val else 2 * valBatches
         for batchId in range(batches):
             yield queue.get()
     def formatTarget(self, target, mask, biOutput=True):
