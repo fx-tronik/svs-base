@@ -12,6 +12,8 @@ import numpy as np
 import glob
 import os
 import re
+from annotations import annotations
+
 def loadImages(dataDir):
     extensions = ['jpg', 'png', 'bmp', 'jpeg']
     extensions += [x.upper() for x in extensions]
@@ -33,6 +35,9 @@ def writeText(image, margin, text):
     wt = w / 2 -10
     return cv2.putText(image, text, (wt, ht),cv2.FONT_HERSHEY_SIMPLEX, 1, color,
                        2, lineType=cv2.LINE_AA)
+clicked = False
+sx, sy = 0, 0 #start coordinates for bbox
+anns = annotations()
 POSE_COCO_BODY_PARTS = ['nose',
                         'neck',
                         'rshoulder',
@@ -51,11 +56,18 @@ POSE_COCO_BODY_PARTS = ['nose',
                         'leye',
                         'rear',
                         'lear']
-MODES = ['NEW',
-         'SHIFT',
-         'DELETE',
-         'MASK',
-         'BBOX']
+MODES = [                'NEW',
+                         'SHIFT',
+                         'DELETE',
+                         'MASK',
+                         'BBOX']
+bodyPart = 0
+bbox = None
+windowName = 'Etykieciarka'
+margin = 100
+winW, winH = 1200, 800
+dataDir = os.path.expanduser('~/data/fxtest')
+mode = 0
 def selectMode(lastChars):
     global POSE_COCO_BODY_PARTS, MODES, MODES_KEYS
     assert( len(lastChars) <= 3)  
@@ -76,28 +88,44 @@ def selectMode(lastChars):
                 bodyPart = POSE_COCO_BODY_PARTS.index(result[0])
                 print bodyPart
     return mode, bodyPart
+
+def mouseCallback(event,x,y,flags,param):
+    global clicked, annotations, sx, sy, mode, anns, bbox
+    if MODES[mode] == 'NEW':
+        pass
+    if MODES[mode] == 'SHIFT':
+        pass
+    if MODES[mode] == 'DELETE':
+        pass
+    if MODES[mode] == 'MASK':
+        pass
+    if MODES[mode] == 'BBOX':
+        if event == cv2.EVENT_LBUTTONDOWN:
+            sx, sy = x, y
+        elif event == cv2.EVENT_LBUTTONUP:
+            anns.newBBox(sx, sy, x, y, bbox)
+            bbox = anns.getCurAnnId()
+    if event == cv2.EVENT_LBUTTONDBLCLK:
+        print 'Click: {} {}'.format(x, y)
             
-mode = MODES[-1]
-bodyPart = 0
-windowName = 'Etykieciarka'
-margin = 100
-winW, winH = 1200, 800
-dataDir = os.path.expanduser('~/data/ownData')
-mode = False
+
 
 filelist = loadImages(dataDir)
 for fileName in filelist:
-    bbox = -1
+    bbox = None
     image = loadImage(fileName)
     fImage = addFrame(image, margin)
     tImage = writeText(fImage, margin, 'Tryb:')
     cv2.namedWindow(windowName, cv2.WINDOW_NORMAL)
     cv2.resizeWindow(windowName, winW, winH)
+    cv2.setMouseCallback(windowName, mouseCallback)
     lastChars = ''
     while(1):
         k = cv2.waitKey(1) & 0xFF
         if chr(k).isdigit():
+            print k
             bbox = int(chr(k))
+            anns.setCurAnnId(bbox)
         elif k!=27 and k!=255:
             lastChars += chr(k)
             lastChars = lastChars[-3:]
@@ -107,8 +135,8 @@ for fileName in filelist:
         stStr = 'Tryb: {}'.format(MODES[mode])
         if mode == 0:
             stStr += ' {}'.format(POSE_COCO_BODY_PARTS[bodyPart])
-            if bbox >=0:
-                stStr += ' BBOX: {}'.format(bbox)
+        if bbox >=0:
+            stStr += ' BBOX: {}'.format(bbox)
         tImage = writeText(np.copy(fImage), margin, stStr)
         cv2.imshow(windowName, tImage)
 cv2.destroyWindow(windowName)
