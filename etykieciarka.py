@@ -22,10 +22,13 @@ def loadImages(dataDir):
         filelist.extend(glob.glob(os.path.join(dataDir, '*.{}'.format(ext))))
     return filelist
 def loadImage(fileName):
-    return cv2.imread(fileName)
-def addFrame(image, margin = 100):
+    image = cv2.imread(fileName)
+    h, w, _ = image.shape
+    mask = np.zeros((h, w), dtype = np.uint8)
+    return image, mask
+def addFrame(image, margin = 100, val = 255):
     h, w, ch = image.shape
-    framedImg = 255 * np.ones((h+2*margin, w+2*margin, ch), dtype = np.uint8)
+    framedImg = val * np.ones((h+2*margin, w+2*margin, ch), dtype = np.uint8)
     framedImg[margin:-margin, margin:-margin] = image
     return framedImg
 def writeText(image, margin, text):
@@ -63,10 +66,11 @@ MODES = [                'NEW',
                          'BBOX']
 bodyPart = 0
 bbox = None
+mask = None
 windowName = 'Etykieciarka'
 margin = 100
 winW, winH = 1200, 800
-dataDir = os.path.expanduser('~/data/fxtest')
+dataDir = os.path.expanduser('~/data/ownDataT')
 mode = 0
 def selectMode(lastChars):
     global POSE_COCO_BODY_PARTS, MODES, MODES_KEYS
@@ -90,7 +94,7 @@ def selectMode(lastChars):
     return mode, bodyPart
 
 def mouseCallback(event,x,y,flags,param):
-    global clicked, annotations, sx, sy, mode, anns, bbox
+    global clicked, annotations, sx, sy, mode, anns, bbox, mask
     if MODES[mode] == 'NEW':
         pass
     if MODES[mode] == 'SHIFT':
@@ -98,7 +102,12 @@ def mouseCallback(event,x,y,flags,param):
     if MODES[mode] == 'DELETE':
         pass
     if MODES[mode] == 'MASK':
-        pass
+        if event == cv2.EVENT_LBUTTONDOWN:
+            clicked = True
+        elif event == cv2.EVENT_LBUTTONUP:
+            clicked = False
+        if clicked:
+            mask = cv2.circle(mask, (x-margin, y-margin), 20, 255, -1)
     if MODES[mode] == 'BBOX':
         if event == cv2.EVENT_LBUTTONDOWN:
             sx, sy = x, y
@@ -113,7 +122,7 @@ def mouseCallback(event,x,y,flags,param):
 filelist = loadImages(dataDir)
 for fileName in filelist:
     bbox = None
-    image = loadImage(fileName)
+    image, mask = loadImage(fileName)
     fImage = addFrame(image, margin)
     tImage = writeText(fImage, margin, 'Tryb:')
     cv2.namedWindow(windowName, cv2.WINDOW_NORMAL)
@@ -138,5 +147,13 @@ for fileName in filelist:
         if bbox >=0:
             stStr += ' BBOX: {}'.format(bbox)
         tImage = writeText(np.copy(fImage), margin, stStr)
+        mask3ch = addFrame(np.stack(3 *[mask], axis=2), val = 0)
+        tImage -= (mask3ch  > 0) * tImage /2 
         cv2.imshow(windowName, tImage)
 cv2.destroyWindow(windowName)
+
+import scipy
+a = 600*np.random.rand(100, 2)
+q = np.array([100, 100])
+tree = scipy.spatial.cKDTree(a.T, leafsize=10)
+res = tree.query(q, k=5)
