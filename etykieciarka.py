@@ -155,5 +155,5 @@ cv2.destroyWindow(windowName)
 import scipy
 a = 600*np.random.rand(100, 2)
 q = np.array([100, 100])
-tree = scipy.spatial.cKDTree(a.T, leafsize=10)
+tree = scipy.spatial.cKDTree(a, leafsize=10)
 res = tree.query(q, k=5)

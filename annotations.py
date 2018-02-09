@@ -29,7 +29,7 @@ class annotations:
         if bboxId is None:
             print 'notID', bboxId
             bboxId = len(self.data)
-        ann = {'bbox':[tlx, tly, brx, bry], 'id': bboxId}
+        ann = {'bbox':[tlx, tly, brx, bry], 'id': bboxId, 'keypoints':51 * [0]}
         if bboxId not in [anx['id'] for anx in self.data]:
             self.data.append(ann)
             print 'Dodano nowy ann'

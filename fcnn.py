@@ -83,7 +83,8 @@ class fcnn(nnBase):
         # Final convolutional layer
         lastNonlin = logSoftmax2 if train else softmax2
         network = L.Conv2DLayer(network, num_filters=2*self.numClasses, 
-                                filter_size=(1, 1), nonlinearity=lastNonlin)
+                                filter_size=(1, 1), 
+                                nonlinearity=lasagne.nonlinearities.identity)
         network = L.ReshapeLayer(network, ([0], self.numClasses, 2, [2], [3]))
         network = L.NonlinearityLayer(network, lastNonlin)
         if modelFile:
