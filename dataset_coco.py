@@ -283,8 +283,8 @@ class Dataset:
     def initWorkers(self):
         self.trainQ = None
         self.valQ = None
-        self.trainQ = Queue(12)
-        self.valQ = Queue(5)
+        self.trainQ = Queue(8)
+        self.valQ = Queue(3)
         self.trainP = Process(target=self.batchGenerator, args=(self.trainQ, False))
         self.trainP.start()
         self.valP = Process(target=self.batchGenerator, args=(self.valQ, True))
@@ -317,9 +317,9 @@ class Dataset:
         cv2.waitKey(0)
         cv2.destroyWindow(winName)
     def iterateMinibatches(self, val = False):
-        valBatches = 1
+        valBatches = 8
         queue = self.valQ if val else self.trainQ
-        batches = valBatches if val else 2 * valBatches
+        batches = valBatches if val else 8 * valBatches
         for batchId in range(batches):
             yield queue.get()
     def formatTarget(self, target, mask, biOutput=True):
