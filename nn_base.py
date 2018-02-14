@@ -14,8 +14,8 @@ import lasagne.layers as L
 import time
 from theanoFunctions import categoricalCrossentropyLogdomain2
 from logger import Logger
-#allCats = np.load('categories.npz')
-allCats = np.load('categoriesMPII.npz')
+allCats = np.load('categories.npz')
+#allCats = np.load('categoriesMPII.npz')
 allCats = list(allCats[allCats.keys()[0]])
 
 class nnBase(object):

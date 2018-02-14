@@ -154,7 +154,7 @@ def build_residual_block(incoming_layer, ratio_n_filter=1.0, ratio_size=1.0, has
 
 def build_model(inputVar = None):
     net = {}
-    net['input'] = InputLayer((None, 1, 256, 256), input_var = inputVar)
+    net['input'] = InputLayer((None, 1, None, None), input_var = inputVar)
     sub_net, parent_layer_name = build_simple_block(
         net['input'], ['conv1', 'bn_conv1', 'conv1_relu'],
         64, 7, 2, 3, use_bias=True)
@@ -209,7 +209,7 @@ class fcnn(nnBase):
     networkName = 'resnet50'
     
     numClasses = 29
-    networkScale = 8
+    networkScale = 12
 
     imageSize = 256
     targetSize = 14
