@@ -5,6 +5,8 @@ Created on Tue Jan  2 11:01:20 2018
 Plik przygotowujący obrazy ze zbioru COCO przy użyciu API 
 @author: jakub
 """
+from __future__ import print_function
+#from __future__ import division
 import matplotlib
 matplotlib.use('AGG')
 from pycocotools.coco import COCO
@@ -81,7 +83,7 @@ class Dataset:
         sCatNms = self.sCatNms
         kpCatNms = self.kpCatNms
         w, h = img['width'], img['height']
-        ws, hs = [dim / networkScale for dim in [w, h]]
+        ws, hs = [int(dim // networkScale) for dim in [w, h]]
         targets = [np.zeros((hs, ws), dtype=np.float32) for _ in sCatNms]
         kpMasks = np.zeros((hs, ws), dtype=np.float32) 
         #targets = [np.zeros((h, w), dtype=np.float32) for _ in sCatNms]
@@ -109,7 +111,7 @@ class Dataset:
         kpCatNms = self.kpCatNms
         networkScale = self.networkScale
         w, h = img['width'], img['height']
-        ws, hs = [dim / networkScale for dim in [w, h]]
+        ws, hs = [dim // networkScale for dim in [w, h]]
         targets = [np.zeros((hs, ws), dtype=np.float32) for _ in kpCatNms]
         for ann in anns:
             if 'keypoints' in ann and type(ann['keypoints']) == list:
@@ -118,8 +120,8 @@ class Dataset:
                 #kpn = coco_kps.loadCats(ann['category_id'])[0]['keypoints']
                 tarDim = np.sqrt(ann['area']) / 10 / networkScale 
                 kps = np.array(ann['keypoints'])
-                x = kps[0::3] / networkScale
-                y = kps[1::3] / networkScale
+                x = kps[0::3] // networkScale
+                y = kps[1::3] // networkScale
                 v = kps[2::3]
                 for i, (xCor, yCor, vis) in enumerate(zip(x, y, v)):
                     if np.all([xCor, yCor, vis]):
@@ -244,12 +246,12 @@ class Dataset:
             annIds = workingCocos[0].getAnnIds(imgIds=img['id'])
             anns = workingCocos[0].loadAnns(annIds)
             addSuperCat(anns)
-            #print 'COCOS processing took {} s'.format(time.time() - start)
+            #print('COCOS processing took {} s'.format(time.time() - start))
             #start = time.time()
             imgPath = os.path.join(dataDir, dataType, img['file_name'])
             image = cv2.imread(imgPath, 0)
             image = image.astype(np.float32) / 255.0
-            #print 'LOAD image took {} s'.format(time.time() - start)
+            #print('LOAD image took {} s'.format(time.time() - start))
             
             iTargets, kpMasks = self.generateInstancesTargets(img, anns, workingCocos[0])
             kpAnns = []
@@ -265,7 +267,7 @@ class Dataset:
             image = self.cutPatch2(image, scale, stride)
             [targets, masks] = map(lambda t: self.cutPatch2(t, scale, stride, alreadyNetworkScaled=True), 
                                           [targets, masks])
-            #print 'Targets generating took {} s'.format(time.time() - start)
+            #print('Targets generating took {} s'.format(time.time() - start))
             targets, masks = self.formatTarget(targets, masks, biOutput=self.biOutput)
 
             iCont.append(image)
@@ -306,7 +308,7 @@ class Dataset:
         elif len(t.shape) == 2:
             tShow = np.copy(t)
         else:
-            print 'Invalid tensor format'
+            print('Invalid tensor format')
             return False
         chrs = list(string.ascii_lowercase)
         random.shuffle(chrs)
@@ -329,8 +331,8 @@ class Dataset:
         targetSize = self.targetSize
         imageSize = self.imageSize
         networkScale = self.networkScale
-        margin = (imageSize / networkScale - targetSize) / 2
-        scaledMargin = (imageSize - targetSize * networkScale) /2
+        margin = (imageSize // networkScale - targetSize) // 2
+        scaledMargin = (imageSize - targetSize * networkScale) // 2
         target = target[:,margin:-margin, margin:-margin]
         mask = mask[:,margin:-margin, margin:-margin]
 #==============================================================================
@@ -397,7 +399,7 @@ if __name__ == "__main__":
     dataDir = '/home/jakub/data/coco'
     dataset  = Dataset(dataDir=dataDir, imageSize=256, targetSize=24, 
                        batchSize=8, minLabelArea=16)
-    #testDataset(dataset, classes = [17])
+    #testDataset(dataset, classes = [20])
     start = time.time()
     for epoch in range(1):
         try:
@@ -410,5 +412,5 @@ if __name__ == "__main__":
         except KeyboardInterrupt:
             dataset.endDataset()
     dataset.endDataset()
-    print 'It took {} sconds'.format(time.time() - start)
+    print('It took {} sconds'.format(time.time() - start))
 

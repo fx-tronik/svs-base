@@ -8,7 +8,8 @@ Logger
 import os
 import matplotlib
 matplotlib.use('agg', force=True)
-plt = matplotlib.pyplot
+import matplotlib.pyplot as plt
+#plt = matplotlib.pyplot
 import hashlib
 import time
 from datetime import datetime

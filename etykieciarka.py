@@ -13,7 +13,10 @@ import glob
 import os
 import re
 from annotations import annotations
-
+from common import draw_anns, prepare_dir, CocoPart
+MIN_IMG_ID = 200000
+img_id  = MIN_IMG_ID
+TARGET_DIR = '/home/jakub/data/NEW_COCO/'
 def loadImages(dataDir):
     extensions = ['jpg', 'png', 'bmp', 'jpeg']
     extensions += [x.upper() for x in extensions]
@@ -35,30 +38,12 @@ def writeText(image, margin, text):
     color = (0,0,255)
     h, w, ch = image.shape
     ht = h - 10
-    wt = w / 2 -10
-    return cv2.putText(image, text, (wt, ht),cv2.FONT_HERSHEY_SIMPLEX, 1, color,
+    wt = w / 5 -10
+    return cv2.putText(image, text, (wt, ht),cv2.FONT_HERSHEY_SIMPLEX, 0.5, color,
                        2, lineType=cv2.LINE_AA)
 clicked = False
 sx, sy = 0, 0 #start coordinates for bbox
 anns = annotations()
-POSE_COCO_BODY_PARTS = ['nose',
-                        'neck',
-                        'rshoulder',
-                        'relbow',
-                        'rwrist',
-                        'lshoulder',
-                        'lelbow',
-                        'lwrist',
-                        'rhip',
-                        'rknee',
-                        'rankle',
-                        'lhip',
-                        'lknee',
-                        'lankle',
-                        'reye',
-                        'leye',
-                        'rear',
-                        'lear']
 MODES = [                'NEW',
                          'SHIFT',
                          'DELETE',
@@ -70,33 +55,42 @@ mask = None
 windowName = 'Etykieciarka'
 margin = 100
 winW, winH = 1200, 800
+tImage = None
 dataDir = os.path.expanduser('~/data/ownDataT')
 mode = 0
 def selectMode(lastChars):
-    global POSE_COCO_BODY_PARTS, MODES, MODES_KEYS
+    global  MODES, MODES_KEYS
+    global bodyPart
     assert( len(lastChars) <= 3)  
     mode = 0
-    bodyPart = 0 
     if len(lastChars) > 0:
         modeIds = [x[0] for x in MODES]
         if lastChars[-1] in modeIds:
             mode = modeIds.index(lastChars[-1])
         else:
             result = []
-            for l in POSE_COCO_BODY_PARTS:
+            for l in [CocoPart(x).name for x in range(len(CocoPart))]:
                 match = re.search('^{}'.format(lastChars),l, re.IGNORECASE)
                 if match:
                     result += [l]
             if result:
                 print result
-                bodyPart = POSE_COCO_BODY_PARTS.index(result[0])
+                bodyPart = [CocoPart(x).name for x in range(len(CocoPart))].index(result[0])
                 print bodyPart
     return mode, bodyPart
 
 def mouseCallback(event,x,y,flags,param):
-    global clicked, annotations, sx, sy, mode, anns, bbox, mask
+    global clicked, annotations, sx, sy, mode, anns, bbox, mask, tImage, bodyPart
     if MODES[mode] == 'NEW':
-        pass
+        if event == cv2.EVENT_LBUTTONDOWN:
+            bodyPart+=1
+            if bodyPart >= len(CocoPart):
+                bodyPart = 0
+            #DODAĆ CZĘŚĆ CIAŁA
+        if event == cv2.EVENT_RBUTTONDOWN:
+            bodyPart+=1
+            if bodyPart >= len(CocoPart):
+                bodyPart = 0
     if MODES[mode] == 'SHIFT':
         pass
     if MODES[mode] == 'DELETE':
@@ -112,7 +106,7 @@ def mouseCallback(event,x,y,flags,param):
         if event == cv2.EVENT_LBUTTONDOWN:
             sx, sy = x, y
         elif event == cv2.EVENT_LBUTTONUP:
-            anns.newBBox(sx, sy, x, y, bbox)
+            anns.newBBox(sx - margin, sy - margin, x - margin, y - margin, bbox, img_id)
             bbox = anns.getCurAnnId()
     if event == cv2.EVENT_LBUTTONDBLCLK:
         print 'Click: {} {}'.format(x, y)
@@ -120,9 +114,12 @@ def mouseCallback(event,x,y,flags,param):
 
 
 filelist = loadImages(dataDir)
+prepare_dir(TARGET_DIR)
 for fileName in filelist:
-    bbox = None
+    bbox = anns.getCurAnnId() + 1
+    firstBbox = bbox
     image, mask = loadImage(fileName)
+    cv2.imwrite(os.path.join(TARGET_DIR, 'images','{}.jpg'.format(img_id)), image)
     fImage = addFrame(image, margin)
     tImage = writeText(fImage, margin, 'Tryb:')
     cv2.namedWindow(windowName, cv2.WINDOW_NORMAL)
@@ -133,7 +130,7 @@ for fileName in filelist:
         k = cv2.waitKey(1) & 0xFF
         if chr(k).isdigit():
             print k
-            bbox = int(chr(k))
+            bbox = firstBbox + int(chr(k))
             anns.setCurAnnId(bbox)
         elif k!=27 and k!=255:
             lastChars += chr(k)
@@ -143,13 +140,15 @@ for fileName in filelist:
             break
         stStr = 'Tryb: {}'.format(MODES[mode])
         if mode == 0:
-            stStr += ' {}'.format(POSE_COCO_BODY_PARTS[bodyPart])
+            stStr += ' {}'.format(CocoPart(bodyPart).name)
         if bbox >=0:
             stStr += ' BBOX: {}'.format(bbox)
         tImage = writeText(np.copy(fImage), margin, stStr)
         mask3ch = addFrame(np.stack(3 *[mask], axis=2), val = 0)
         tImage -= (mask3ch  > 0) * tImage /2 
+        tImage = draw_anns(tImage, anns.data, img_id, margin)
         cv2.imshow(windowName, tImage)
+    img_id += 1
 cv2.destroyWindow(windowName)
 
 import scipy

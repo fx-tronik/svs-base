@@ -237,7 +237,7 @@ if __name__ == "__main__":
     dataDir = '/home/jakub/data/MPII'
     dataset  = Dataset(dataDir=dataDir, imageSize=256, targetSize=24, 
                        batchSize=8, minLabelArea=16)
-    #testDataset(dataset, classes = [6])
+    testDataset(dataset, classes = [6])
     
     start = time.time()
     for epoch in range(1):

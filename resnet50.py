@@ -186,7 +186,7 @@ def build_model(inputVar = None):
         else:
             sub_net, parent_layer_name = build_residual_block(net[parent_layer_name], 1.0/4, 1, False, 4, ix='4%s' % c)
         net.update(sub_net)
-    
+
     block_size = list('abc')
 #==============================================================================
 #     for c in block_size:
@@ -200,37 +200,37 @@ def build_model(inputVar = None):
 #                              mode='average_exc_pad', ignore_border=False)
 #     net['fc1000'] = DenseLayer(net['pool5'], num_units=1000, nonlinearity=None)
 #     net['prob'] = NonlinearityLayer(net['fc1000'], nonlinearity=softmax)
-# 
+#
 #==============================================================================
     return net
 
 
 class fcnn(nnBase):
     networkName = 'resnet50'
-    
+
     numClasses = 29
-    networkScale = 12
+    networkScale = 8
 
     imageSize = 256
     targetSize = 14
     batchSize = 24
-    
+
     convFilters0 = 32
     convFilters1 = 64
     convFilters2 = 128
     convFilters3 = 256
-    
+
     def __init__(self, modelWeights=None, train=True):
         nnBase.__init__(self, modelWeights, train=train)
-        
+
     def buildNN(self, modelFile, inputVar, train=True):
         print 'Model building'
         net = build_model(inputVar = inputVar)
         network = net['res4f_relu']
         # Final convolutional layer
         lastNonlin = logSoftmax2 if train else softmax2
-        network = L.Conv2DLayer(network, num_filters=2*self.numClasses, 
-                                filter_size=(1, 1), 
+        network = L.Conv2DLayer(network, num_filters=2*self.numClasses,
+                                filter_size=(1, 1),
                                 nonlinearity=lasagne.nonlinearities.identity)
         network = L.ReshapeLayer(network, ([0], self.numClasses, 2, [2], [3]))
         network = L.NonlinearityLayer(network, lastNonlin)
@@ -240,14 +240,14 @@ class fcnn(nnBase):
             L.set_all_param_values(network, modelWeights)
 
         return network
-        
+
     @staticmethod
     def getNumClasses(self):
         return self.numClasses
-    
+
     @staticmethod
     def getNetworkScale(self):
-        return self.networkScale 
-    
+        return self.networkScale
+
     def getNetworkName(self):
         return self.networkName

@@ -21,26 +21,26 @@ allCats = list(allCats[allCats.keys()[0]])
 class nnBase(object):
     def buildNN(self, modelFile, inputVar):
         raise NotImplementedError
-        
+
     @staticmethod
     def getNetworkScale():
         raise NotImplementedError
-        
+
     @staticmethod
     def getReceptiveFieldWidth(self):
         raise NotImplementedError
-        
+
     @staticmethod
     def getReceptiveFieldHeight(self):
         raise NotImplementedError
-        
+
     @staticmethod
     def getNumClasses(self):
         raise NotImplementedError
-        
+
     def getNetworkName(self):
         raise NotImplementedError
-        
+
     def __init__(self, modelWeights=None, train=True):
         self.inputVar = T.tensor4('input')
         self.network = self.buildNN(modelWeights, self.inputVar, train=train)
@@ -51,7 +51,7 @@ class nnBase(object):
         tensor5 = T.TensorType('float32', (False,)*5)
         targetVar = tensor5('targets')
         weightVar = T.tensor4('weights')
-        
+
         model = self.network
         prediction = L.get_output(model)
         loss = categoricalCrossentropyLogdomain2(prediction, targetVar)
@@ -59,17 +59,17 @@ class nnBase(object):
         loss = loss.mean()
         params = L.get_all_params(model, trainable=True)
         updates = lasagne.updates.adam(loss, params, learning_rate=learningRate)
-        
+
         valPrediction =L.get_output(model, deterministic=True)
         valLoss = categoricalCrossentropyLogdomain2(valPrediction, targetVar)
         valLoss = valLoss * weightVar
         valLoss = valLoss.mean()
         valAcc = T.sum(T.eq(T.argmax(valPrediction, axis=2), \
-                            T.argmax(targetVar, axis=2))*weightVar, 
+                            T.argmax(targetVar, axis=2))*weightVar,
                       dtype=theano.config.floatX)
         binTar = targetVar > 0.5
         binPred = T.exp(valPrediction) > 0.5
-        
+
         statsPerClass = []
         for cat in range(len(allCats)):
             binClTar = binTar[:, cat, 0]
@@ -90,23 +90,23 @@ class nnBase(object):
 
 
 
-        
-        valAcc /= T.sum(weightVar)  
-        
-        trainFn = theano.function([inputVar, targetVar, weightVar], loss, 
+
+        valAcc /= T.sum(weightVar)
+
+        trainFn = theano.function([inputVar, targetVar, weightVar], loss,
                                   updates=updates, allow_input_downcast=True)
-        valFn = theano.function([inputVar, targetVar, weightVar], 
-                                 [valLoss, valAcc, statsPerClass], 
+        valFn = theano.function([inputVar, targetVar, weightVar],
+                                 [valLoss, valAcc, statsPerClass],
                                  allow_input_downcast=True)
         self.trainFn = trainFn
         self.valFn = valFn
-        
+
     def compileTestFunctions(self):
         print("Compiling functions...")
         inputVar = self.inputVar
         model = self.network
         prediction = L.get_output(model, deterministic=True)
-        forwardFn = theano.function([inputVar], prediction, 
+        forwardFn = theano.function([inputVar], prediction,
                                     allow_input_downcast=True)
         self.forwardFn = forwardFn
     def train(self, dataset, numEpochs=100):
@@ -129,12 +129,12 @@ class nnBase(object):
                 trainErr = 0
                 trainBatches = 0
                 startTime = time.time()
-                
+
                 for batch in dataset.iterateMinibatches():
                     inputs, targets, weights = batch
                     trainErr += trainFn(inputs, targets, weights)
                     trainBatches += 1
-                
+
                 # And a full pass over the validation data:
                 valErr = 0
                 valBatches = 0
@@ -147,11 +147,12 @@ class nnBase(object):
                     valAcc += acc
                     epochStats += stats
                     valBatches += 1
-                logger.processEpoch(trainErr / trainBatches, valErr / valBatches, 
+                logger.processEpoch(trainErr / trainBatches, valErr / valBatches,
                                 valAcc / valBatches)
                 epochStats /= valBatches
                 # Then we print the results for this epoch:
-                print("Epoch {} of {} took {:.3f}s".format(epoch + 1, numEpochs, time.time() - startTime))
+                print("Epoch {} of {} took {:.3f}s".format(epoch + 1,
+                      numEpochs, time.time() - startTime))
                 print("  training loss:\t\t{:.6f}".format(trainErr / trainBatches))
                 print("  validation loss:\t\t{:.6f}".format(valErr / valBatches))
                 print("  validation accuracy:\t\t{:.2f} %".format(valAcc / valBatches * 100))
@@ -161,22 +162,22 @@ class nnBase(object):
                     print("  validation precissi:\t\t{:.2f} %".format(pre * 100))
                     print("  validation recall  :\t\t{:.2f} %".format(rec  * 100))
                     print("  validation F1Score :\t\t{:.2f} %".format(F1  * 100))
-                
+
                 if ((valErr / valBatches) < bestVal) :
                     bestVal = valErr / valBatches
-                    # save network            
-                    np.savez('models/model_{}.npz'.format(self.getNetworkName()), lasagne.layers.get_all_param_values(self.network))
+                    # save network
+                    np.savez('models/model_{}.npz'.format(self.getNetworkName()),
+                              lasagne.layers.get_all_param_values(self.network))
                     print('Model saved, lowest val {:.6f}'.format(bestVal))
         except KeyboardInterrupt:
             print 'Training stopped'
             dataset.endDataset()
             logger.logEnd(success=False)
             failed = True
-            
+
         if not failed:
             dataset.endDataset()
             logger.logEnd()
-            
-                
-        
-        
+    #def test_file(self, filename):
+    #    self.compileTestFunctions()
+    #    image
