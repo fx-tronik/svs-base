@@ -7,16 +7,20 @@ Nie używa środka i skali, gdyż wydają się niepotrzebne, ewentualnie można 
 obliczyć z punktów kluczowych
 @author: jakub
 '''
+from __future__ import print_function
 import cv2
 import numpy as np
 import glob
 import os
 import re
-from annotations import annotations
-from common import draw_anns, prepare_dir, CocoPart
-MIN_IMG_ID = 200000
-img_id  = MIN_IMG_ID
-TARGET_DIR = '/home/jakub/data/NEW_COCO/'
+from annotations import annotations, MIN_ID, MIN_IMG_ID
+from common import draw_anns, prepare_dir, CocoPart, BodyPart, draw_humans
+TARGET_DIR = os.path.expanduser('~/data/OWN_COCO/')
+#TARGET_DIR = os.path.expanduser('~/data/NEW_COCO/')
+jsonFile = 'own_pose_dataset.json'
+#jsonFile = 'person_keypoints_val2017.json'
+LOAD = True
+
 def loadImages(dataDir):
     extensions = ['jpg', 'png', 'bmp', 'jpeg']
     extensions += [x.upper() for x in extensions]
@@ -25,10 +29,11 @@ def loadImages(dataDir):
         filelist.extend(glob.glob(os.path.join(dataDir, '*.{}'.format(ext))))
     return filelist
 def loadImage(fileName):
+    imageId = os.path.basename(fileName).split('.')[0]
     image = cv2.imread(fileName)
     h, w, _ = image.shape
     mask = np.zeros((h, w), dtype = np.uint8)
-    return image, mask
+    return image, mask, imageId
 def addFrame(image, margin = 100, val = 255):
     h, w, ch = image.shape
     framedImg = val * np.ones((h+2*margin, w+2*margin, ch), dtype = np.uint8)
@@ -41,14 +46,17 @@ def writeText(image, margin, text):
     wt = w / 5 -10
     return cv2.putText(image, text, (wt, ht),cv2.FONT_HERSHEY_SIMPLEX, 0.5, color,
                        2, lineType=cv2.LINE_AA)
+
 clicked = False
 sx, sy = 0, 0 #start coordinates for bbox
 anns = annotations()
-MODES = [                'NEW',
-                         'SHIFT',
-                         'DELETE',
-                         'MASK',
-                         'BBOX']
+if LOAD:
+    _ , img_id = anns.loadJson(os.path.join(TARGET_DIR, 'annotations', jsonFile))
+MODES = ['NEW',
+         'SHIFT',
+         'DELETE',
+         'MASK',
+         'BBOX']
 bodyPart = 0
 bbox = None
 mask = None
@@ -56,8 +64,14 @@ windowName = 'Etykieciarka'
 margin = 100
 winW, winH = 1200, 800
 tImage = None
-dataDir = os.path.expanduser('~/data/ownDataT')
+dataDir = os.path.join(TARGET_DIR, 'images')
 mode = 0
+def nextBodyPart():
+    global bodyPart
+    bodyPart +=1
+    if bodyPart >= len(CocoPart): #skip background
+        bodyPart = 0
+    return bodyPart
 def selectMode(lastChars):
     global  MODES, MODES_KEYS
     global bodyPart
@@ -74,23 +88,22 @@ def selectMode(lastChars):
                 if match:
                     result += [l]
             if result:
-                print result
+                print(result)
                 bodyPart = [CocoPart(x).name for x in range(len(CocoPart))].index(result[0])
-                print bodyPart
+                print(bodyPart)
     return mode, bodyPart
 
 def mouseCallback(event,x,y,flags,param):
-    global clicked, annotations, sx, sy, mode, anns, bbox, mask, tImage, bodyPart
+    global clicked, anns, sx, sy, mode, anns, bbox, mask, tImage, bodyPart, MIN_ID
     if MODES[mode] == 'NEW':
         if event == cv2.EVENT_LBUTTONDOWN:
-            bodyPart+=1
-            if bodyPart >= len(CocoPart):
-                bodyPart = 0
-            #DODAĆ CZĘŚĆ CIAŁA
+            bP = BodyPart(bbox, bodyPart, x - margin, y - margin, score = 1.0)
+            anns.addBodyPart(bP, bbox)            
+            nextBodyPart()
         if event == cv2.EVENT_RBUTTONDOWN:
-            bodyPart+=1
-            if bodyPart >= len(CocoPart):
-                bodyPart = 0
+            nextBodyPart()
+        if event == cv2.EVENT_MBUTTONDOWN:
+            anns.removeBodyPart(bodyPart, bbox)
     if MODES[mode] == 'SHIFT':
         pass
     if MODES[mode] == 'DELETE':
@@ -107,31 +120,48 @@ def mouseCallback(event,x,y,flags,param):
             sx, sy = x, y
         elif event == cv2.EVENT_LBUTTONUP:
             anns.newBBox(sx - margin, sy - margin, x - margin, y - margin, bbox, img_id)
-            bbox = anns.getCurAnnId()
+            #bbox = anns.getCurAnnId()
     if event == cv2.EVENT_LBUTTONDBLCLK:
-        print 'Click: {} {}'.format(x, y)
+        print('Click: {} {}'.format(x, y))
             
 
 
 filelist = loadImages(dataDir)
 prepare_dir(TARGET_DIR)
 for fileName in filelist:
-    bbox = anns.getCurAnnId() + 1
-    firstBbox = bbox
-    image, mask = loadImage(fileName)
-    cv2.imwrite(os.path.join(TARGET_DIR, 'images','{}.jpg'.format(img_id)), image)
+    image, mask, img_id = loadImage(fileName)
+    #cv2.imwrite(os.path.join(TARGET_DIR, 'images','{}.jpg'.format(img_id)), image)
+    if not anns.imgInAnns(img_id):
+        anns.newImage(fileName, image, img_id)
     fImage = addFrame(image, margin)
     tImage = writeText(fImage, margin, 'Tryb:')
     cv2.namedWindow(windowName, cv2.WINDOW_NORMAL)
     cv2.resizeWindow(windowName, winW, winH)
     cv2.setMouseCallback(windowName, mouseCallback)
     lastChars = ''
+    bboxIds = anns.getBboxIds(img_id)
+    maxAnn, _ = anns.getMaxIds()
+    if bboxIds:
+        bbox = bboxIds[0]
+    else:
+        bbox = maxAnn + 1
     while(1):
-        k = cv2.waitKey(1) & 0xFF
+        k = cv2.waitKey(10) & 0xFF
         if chr(k).isdigit():
-            print k
-            bbox = firstBbox + int(chr(k))
-            anns.setCurAnnId(bbox)
+            kid = int(chr(k))
+            if kid  < len(bboxIds):
+                if MODES[mode] == 'DELETE':
+                    del bboxIds[kid]
+                    anns.delBBox(bbox)
+                    if bboxIds:
+                        bbox = bboxIds[0]
+                    else:
+                        bbox = MIN_ID
+                else:
+                    bbox = bboxIds[kid]
+                    anns.setCurAnnId(bbox)
+            else:
+                bbox = MIN_ID + kid
         elif k!=27 and k!=255:
             lastChars += chr(k)
             lastChars = lastChars[-3:]
@@ -146,10 +176,12 @@ for fileName in filelist:
         tImage = writeText(np.copy(fImage), margin, stStr)
         mask3ch = addFrame(np.stack(3 *[mask], axis=2), val = 0)
         tImage -= (mask3ch  > 0) * tImage /2 
-        tImage = draw_anns(tImage, anns.data, img_id, margin)
+        tImage = draw_anns(tImage, anns.data, img_id, margin, bbox_id=bbox)
+        tImage = draw_humans(tImage, anns.humans, anns.getBboxIds(img_id), margin)
         cv2.imshow(windowName, tImage)
-    img_id += 1
+    anns.dumpJson(os.path.join(TARGET_DIR, 'annotations', jsonFile))
 cv2.destroyWindow(windowName)
+
 
 import scipy
 a = 600*np.random.rand(100, 2)
