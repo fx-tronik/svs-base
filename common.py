@@ -11,6 +11,7 @@ import cv2
 import matplotlib.pyplot as plt
 import os
 import datetime
+from position_from_keypoints import get_base_direction
 
 class PosePart(Enum):
     Nose = 0
@@ -51,6 +52,8 @@ class CocoPart(Enum):
     RKnee = 14
     LAnkle = 15
     RAnkle = 16
+
+
     
 CocoPairs = [
     (0, 1), (0, 2), (0, 5), (0, 6), (1, 3), (2, 4), (5, 6), (5, 7), (6, 8), (5, 11), 
@@ -167,6 +170,7 @@ def draw_humans(npimg, humans, bbox_ids, margin, imgcopy=False):
         return npimg
     
 def draw_anns(img, anns, img_id, margin, bbox_id):
+    draw_pos = True
     color = (0, 255, 0)
     for ann in anns:
         if int(ann['image_id']) != int(img_id):
@@ -178,6 +182,13 @@ def draw_anns(img, anns, img_id, margin, bbox_id):
             img = cv2.rectangle(img, (bbox[0] + margin, bbox[1] + margin),
                                 (bbox[0] + bbox[2] + margin, bbox[1]+bbox[3]+margin), 
                                 color, 2)
+            if draw_pos:
+                direction = get_base_direction(ann['keypoints'])
+                img = cv2.putText(img, direction.name, 
+                                  (bbox[0] + margin,  bbox[1]+ margin),
+                                  cv2.FONT_HERSHEY_SIMPLEX, 0.5, color,
+                                  2, lineType=cv2.LINE_AA)
+            
     return img
 
 def prepare_dir(target_dir):
