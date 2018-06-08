@@ -13,6 +13,9 @@ import os
 import datetime
 from position_from_keypoints import get_base_direction
 
+def search_dictionaries(key, value, list_of_dictionaries):
+    return [i for i, element in enumerate(list_of_dictionaries) if element[key] == value]
+
 class PosePart(Enum):
     Nose = 0
     Neck = 1
@@ -73,6 +76,15 @@ CocoPairsNetwork = [
 CocoColors = [[255, 0, 0], [255, 85, 0], [255, 170, 0], [255, 255, 0], [170, 255, 0], [85, 255, 0], [0, 255, 0],
               [0, 255, 85], [0, 255, 170], [0, 255, 255], [0, 170, 255], [0, 85, 255], [0, 0, 255], [85, 0, 255],
               [170, 0, 255], [255, 0, 255], [255, 0, 170], [255, 0, 85]]
+
+Actions = [
+           {'name': 'standing', 'id': 0, 'key': 'q'},
+           {'name': 'sitting', 'id': 1, 'key': 'a'},
+           {'name': 'walking', 'id': 2, 'key': 'z'},
+           {'name': 'running', 'id': 3, 'key': 'w'},
+           {'name': 'manipulating', 'id': 4, 'key': 's'},
+           {'name': 'other', 'id': 5, 'key': 'x'}
+           ]
 
 class BodyPart:
     """
@@ -184,10 +196,14 @@ def draw_anns(img, anns, img_id, margin, bbox_id):
                                 color, 2)
             if draw_pos:
                 direction = get_base_direction(ann['keypoints'])
-                img = cv2.putText(img, direction.name, 
+                action  =  ann.get('action', None)
+                if not (action is None):
+                    action = Actions[search_dictionaries('id', action, Actions)[0]]['name']
+                img = cv2.putText(img, '{} {}'.format(direction.name, action), 
                                   (bbox[0] + margin,  bbox[1]+ margin),
                                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, color,
                                   2, lineType=cv2.LINE_AA)
+                
             
     return img
 

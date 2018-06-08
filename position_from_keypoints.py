@@ -78,7 +78,7 @@ def is_positive(angle):
     return  (- margin < deg_angle <  margin) or (90 - margin < deg_angle < 90 + margin)
 
 def is_negative(angle):
-    #return true if is directed right or down
+    #return true if is directed left or up
     if not angle:
         return False
     margin = 10
@@ -103,6 +103,27 @@ def get_base_direction(keypoints):
     
     return direction
 
+def get_network_input(keypoints):
+    '''
+    vector of length 28
+    0:4 front back left right one code
+    4:28 sin cos of each point pair in PartPairs
+    '''
+    direction = get_base_direction(keypoints)
+    dir_locus = np.zeros(4)
+    dir_locus[direction.value] = 1.0
+    trigs = np.zeros(24)
+    for i, pair in enumerate(sorted(PartPairs.keys())):
+        angle = pair_angle(keypoints, pair)
+        if angle:
+            trigs[2 * i] = np.sin(angle)
+            trigs[2 * i +1] = np.cos(angle)
+        else:
+            trigs[2 * i] = 0.0
+            trigs[2 * i +1] = 1.0
+    net_input = np.concatenate([dir_locus, trigs])
+    return net_input
+            
 
 
 if __name__ == '__main__':      

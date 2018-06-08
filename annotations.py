@@ -10,6 +10,7 @@ import numpy as np
 import json
 import os
 from common import Human, BodyPart, prepare_image_record
+from position_from_keypoints import get_network_input
 
 MIN_ID = 1000000000000 #to not colide with COCO
 MIN_IMG_ID = 200000
@@ -104,6 +105,15 @@ class annotations:
         self.data[annid]['keypoints'][3*bodyPartId + 2] = 0
         self.data[annid]['num_keypoints'] +=1
         
+    def addAction(self, actionId, bboxId):
+        annid = search_dictionaries('id', bboxId, self.data)
+        if len(annid) == 0:
+            raise ValueError('FATAL ERROR, no human with matching bbox_id {} or {} found'.format(annid))
+        else:
+            annid = annid[0]
+        self.data[annid]['action'] = actionId
+        
+        
     def getBboxIds(self, img_id):
         ann_ids = []
         for ann in self.data:
@@ -142,6 +152,18 @@ class annotations:
             maxAnnId = np.max([maxAnnId, int(ann['id'])])
             maxImgId = np.max([maxImgId, int(ann['image_id'])])
         return maxAnnId, maxImgId
+    
+    def get_action_data(self):
+        xs = []
+        ys = []
+        for ann in self.data:
+            action_id = ann.get('action', None)
+            if action_id is not None:
+                xs.append(get_network_input(ann.get('keypoints')))
+                ys.append(action_id)
+        return np.stack(xs, axis = 0), np.array(ys)
+                
+            
     
     @staticmethod
     def anns2humans(anns):

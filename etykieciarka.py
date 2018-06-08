@@ -13,8 +13,8 @@ import numpy as np
 import glob
 import os
 import re
-from annotations import annotations, MIN_ID, MIN_IMG_ID
-from common import draw_anns, prepare_dir, CocoPart, BodyPart, draw_humans
+from annotations import annotations, MIN_ID, MIN_IMG_ID, search_dictionaries
+from common import draw_anns, prepare_dir, CocoPart, BodyPart, draw_humans, Actions
 TARGET_DIR = os.path.expanduser('~/data/OWN_COCO/')
 #TARGET_DIR = os.path.expanduser('~/data/NEW_COCO/')
 jsonFile = 'own_pose_dataset.json'
@@ -56,7 +56,8 @@ MODES = ['NEW',
          'SHIFT',
          'DELETE',
          'MASK',
-         'BBOX']
+         'BBOX',
+         'ACTION']
 bodyPart = 0
 bbox = None
 mask = None
@@ -73,7 +74,7 @@ def nextBodyPart():
         bodyPart = 0
     return bodyPart
 def selectMode(lastChars):
-    global  MODES, MODES_KEYS
+    global  MODES
     global bodyPart
     assert( len(lastChars) <= 3)  
     mode = 0
@@ -121,11 +122,12 @@ def mouseCallback(event,x,y,flags,param):
         elif event == cv2.EVENT_LBUTTONUP:
             anns.newBBox(sx - margin, sy - margin, x - margin, y - margin, bbox, img_id)
             #bbox = anns.getCurAnnId()
+            
     if event == cv2.EVENT_LBUTTONDBLCLK:
         print('Click: {} {}'.format(x, y))
             
 
-
+print(Actions)
 filelist = loadImages(dataDir)
 prepare_dir(TARGET_DIR)
 for fileName in filelist:
@@ -162,6 +164,10 @@ for fileName in filelist:
                     anns.setCurAnnId(bbox)
             else:
                 bbox = MIN_ID + kid
+        elif MODES[mode] == 'ACTION' and chr(k) in [a['key'] for a in Actions]:
+            actId = search_dictionaries('key', chr(k), Actions)[0]
+            anns.addAction(actId, bbox)
+            
         elif k!=27 and k!=255:
             lastChars += chr(k)
             lastChars = lastChars[-3:]
